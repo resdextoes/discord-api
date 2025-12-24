@@ -26,12 +26,12 @@ app.get("/admins", async (req, res) => {
     const members = await guild.members.fetch();
 
     const admins = members
-      .filter(m => m.roles.cache.has(ADMIN_ROLE_ID))
-      .map(m => ({
-        id: m.user.id,
-        username: m.user.username,
-        avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 })
-      }));
+  .filter(m => m.roles.cache.has(ADMIN_ROLE_ID))
+  .map(m => ({
+    id: m.user.id, // To jest kluczowe!
+    username: m.user.username,
+    avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 })
+  }));
 
     res.json(admins);
   } catch (error) {
@@ -45,4 +45,5 @@ const TOKEN = process.env.DISCORD_TOKEN;
 const PORT = process.env.PORT || 3000;
 
 client.login(TOKEN);
+
 app.listen(PORT, () => console.log(`Serwer działa na porcie ${PORT}`));
