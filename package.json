@@ -1,0 +1,11 @@
+{
+  "name": "discord-web-api",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "module",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "discord.js": "^14.14.1",
+    "express": "^4.18.2"
+  }
+}
