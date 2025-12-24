@@ -1,48 +1,52 @@
-import express from "express";
-import cors from "cors";
-import { Client, GatewayIntentBits } from "discord.js";
+const { Client, GatewayIntentBits } = require('discord.js');
+const express = require('express');
+const cors = require('cors');
 
 const app = express();
 app.use(cors());
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences
+    ]
 });
 
-const GUILD_ID = "1439591884287639694";
-const ADMIN_ROLE_ID = "1439593337488150568";
+const GUILD_ID = 'TWÓJ_ID_SERWERA';
+const ROLE_ID = 'TWÓJ_ID_ROLI_ADMINA';
 
-client.once("ready", () => {
-  console.log(`Bot zalogowany jako ${client.user.tag}`);
+client.once('ready', () => {
+    console.log(`Bot online: ${client.user.tag}`);
 });
 
-app.get("/admins", async (req, res) => {
-  try {
-    const guild = await client.guilds.fetch(GUILD_ID);
-    const members = await guild.members.fetch();
+app.get('/admins', async (req, res) => {
+    try {
+        const guild = await client.guilds.fetch(GUILD_ID);
+        const members = await guild.members.fetch({ withPresences: true });
+        
+        const admins = members
+            .filter(member => member.roles.cache.has(ROLE_ID))
+            .map(member => ({
+                id: member.id,
+                username: member.user.username,
+                avatar: member.user.displayAvatarURL({ extension: 'png', size: 128 }),
+                status: member.presence ? member.presence.status : 'offline'
+            }));
 
-    const admins = members
-  .filter(m => m.roles.cache.has(ADMIN_ROLE_ID))
-  .map(m => ({
-    id: m.user.id, 
-    username: m.user.username,
-    avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 })
-  }));
-
-    res.json(admins);
-  } catch (error) {
-    console.error("Błąd pobierania:", error);
-    res.status(500).json({ error: "Błąd serwera" });
-  }
+        res.json(admins);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
-const TOKEN = process.env.DISCORD_TOKEN;
-const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => {
+    res.send('API is running');
+});
 
-client.login(TOKEN);
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on port ${PORT}`);
+});
 
-app.listen(PORT, () => console.log(`Serwer działa na porcie ${PORT}`));
-
+client.login(process.env.DISCORD_TOKEN);
