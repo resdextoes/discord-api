@@ -1,6 +1,6 @@
-const { Client, GatewayIntentBits } = require('discord.js');
-const express = require('express');
-const cors = require('cors');
+import { Client, GatewayIntentBits } from 'discord.js';
+import express from 'express';
+import cors from 'cors';
 
 const app = express();
 app.use(cors());
@@ -13,8 +13,8 @@ const client = new Client({
     ]
 });
 
-const GUILD_ID = 'TWÓJ_ID_SERWERA';
-const ROLE_ID = 'TWÓJ_ID_ROLI_ADMINA';
+const GUILD_ID = '1439591884287639694';
+const ROLE_ID = '1439593337488150568';
 
 client.once('ready', () => {
     console.log(`Bot online: ${client.user.tag}`);
@@ -36,6 +36,7 @@ app.get('/admins', async (req, res) => {
 
         res.json(admins);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
