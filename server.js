@@ -12,7 +12,6 @@ const client = new Client({
   ]
 });
 
-// PODMIEŃ TYLKO ID SERWERA I ROLI
 const GUILD_ID = "1439591884287639694";
 const ADMIN_ROLE_ID = "1439593337488150568";
 
@@ -28,7 +27,7 @@ app.get("/admins", async (req, res) => {
     const admins = members
   .filter(m => m.roles.cache.has(ADMIN_ROLE_ID))
   .map(m => ({
-    id: m.user.id, // To jest kluczowe!
+    id: m.user.id, 
     username: m.user.username,
     avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 })
   }));
@@ -40,10 +39,10 @@ app.get("/admins", async (req, res) => {
   }
 });
 
-// TOKEN POBIERZEMY ZE ZMIENNYCH ŚRODOWISKOWYCH (DLA BEZPIECZEŃSTWA)
 const TOKEN = process.env.DISCORD_TOKEN;
 const PORT = process.env.PORT || 3000;
 
 client.login(TOKEN);
 
 app.listen(PORT, () => console.log(`Serwer działa na porcie ${PORT}`));
+
