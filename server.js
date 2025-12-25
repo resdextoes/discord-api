@@ -55,15 +55,19 @@ client.on('interactionCreate', async interaction => {
         try {
             await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => { hasResponded = true; });
             
-            const deleted = await interaction.channel.bulkDelete(amount, true);
+            // Filtrowanie błędów przy usuwaniu
+            const deleted = await interaction.channel.bulkDelete(amount, true).catch(err => {
+                if (err.code === 10008) return new Map(); // Ignoruj Unknown Message
+                throw err;
+            });
             
             if (!hasResponded) {
-                await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` }).catch(() => {});
+                await interaction.editReply({ content: `Zakończono operację czyszczenia.` }).catch(() => {});
                 hasResponded = true;
             }
         } catch (error) {
             if (!hasResponded) {
-                await interaction.editReply({ content: 'Błąd: Nie można usunąć wiadomości starszych niż 14 dni.' }).catch(() => {});
+                await interaction.editReply({ content: 'Wystąpił błąd podczas usuwania wiadomości.' }).catch(() => {});
             }
         }
     }
