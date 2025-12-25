@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import express from 'express';
 import cors from 'cors';
 
@@ -79,9 +79,24 @@ app.post('/github-webhook', async (req, res) => {
         if (!data.commits) return res.status(200).send('OK');
         const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
         if (!channel) return res.status(404).send('Error');
+
         for (const commit of data.commits) {
-            const message = `🛠️ **[${data.repository.name}]** Nowy commit!\n> **Autor:** ${commit.author.name}\n> **Wiadomość:** ${commit.message}\n> ${commit.url}`;
-            await channel.send(message);
+            const embed = new EmbedBuilder()
+                .setColor(0x2b2d31)
+                .setTitle(`🛠️ Nowy commit w ${data.repository.name}`)
+                .setURL(commit.url)
+                .setAuthor({ 
+                    name: commit.author.name, 
+                    iconURL: `https://github.com/${commit.author.username}.png` 
+                })
+                .setDescription(commit.message)
+                .addFields(
+                    { name: 'Repozytorium', value: `[${data.repository.full_name}](${data.repository.html_url})`, inline: true },
+                    { name: 'Gałąź', value: data.ref.replace('refs/heads/', ''), inline: true }
+                )
+                .setTimestamp();
+
+            await channel.send({ embeds: [embed] });
         }
         res.status(200).send('OK');
     } catch (error) {
