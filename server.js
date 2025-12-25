@@ -24,10 +24,9 @@ client.once('ready', () => {
 
 app.get('/admins', async (req, res) => {
     try {
-        const guild = client.guilds.cache.get(GUILD_ID);
-        if (!guild) return res.status(404).json({ error: 'Guild not found' });
-
-        const admins = guild.members.cache
+        const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
+        const members = await guild.members.fetch();
+        const admins = members
             .filter(member => member.roles.cache.has(ROLE_ID))
             .map(member => ({
                 id: member.id,
@@ -35,7 +34,6 @@ app.get('/admins', async (req, res) => {
                 avatar: member.user.displayAvatarURL({ extension: 'png', size: 128 }),
                 status: member.presence ? member.presence.status : 'offline'
             }));
-
         res.json(admins);
     } catch (error) {
         res.status(500).json({ error: 'Error' });
@@ -47,12 +45,12 @@ app.post('/github-webhook', async (req, res) => {
         const data = req.body;
         if (!data.commits) return res.status(200).send('OK');
 
-        // Próba znalezienia kanału w pamięci bota
-        const channel = client.channels.cache.get(ANNOUNCEMENT_CHANNEL_ID);
+        // WYMUSZONE POBIERANIE (FETCH) ZAMIAST CACHE
+        const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
 
         if (!channel) {
-            console.error(`BŁĄD: Bot nie widzi kanału ${ANNOUNCEMENT_CHANNEL_ID}`);
-            return res.status(404).send('Channel not found in cache');
+            console.error("LOG: Nadal nie znaleziono kanału przez fetch.");
+            return res.status(404).send('Channel not found');
         }
 
         for (const commit of data.commits) {
@@ -64,6 +62,7 @@ app.post('/github-webhook', async (req, res) => {
         }
         res.status(200).send('OK');
     } catch (error) {
+        console.error("Błąd wysyłania:", error);
         res.status(500).send('Error');
     }
 });
