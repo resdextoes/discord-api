@@ -18,12 +18,12 @@ const client = new Client({
 
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
-const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164';
+const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164'; 
+const WEBSITE_CHANNEL_NAME = 'strona';
 
-// Zmienne do buforowania danych
 let cachedAdmins = null;
 let lastFetchTime = 0;
-const CACHE_DURATION = 60000; // 1 minuta (w milisekundach)
+const CACHE_DURATION = 60000;
 
 client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -65,33 +65,21 @@ client.on('interactionCreate', async interaction => {
 app.get('/admins', async (req, res) => {
     try {
         const now = Date.now();
-        
-        // Jeśli mamy świeże dane w pamięci, wyślij je zamiast pytać Discorda
-        if (cachedAdmins && (now - lastFetchTime < CACHE_DURATION)) {
-            return res.json(cachedAdmins);
-        }
+        if (cachedAdmins && (now - lastFetchTime < CACHE_DURATION)) return res.json(cachedAdmins);
 
         const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
         const members = await guild.members.fetch();
-        
-        const admins = members
-            .filter(m => m.roles.cache.has(ROLE_ID))
-            .map(m => ({
-                id: m.id,
-                username: m.user.username,
-                avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 }),
-                status: m.presence ? m.presence.status : 'offline'
-            }));
+        const admins = members.filter(m => m.roles.cache.has(ROLE_ID)).map(m => ({
+            id: m.id,
+            username: m.user.username,
+            avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 }),
+            status: m.presence ? m.presence.status : 'offline'
+        }));
 
-        // Zapisz do bufora
         cachedAdmins = admins;
         lastFetchTime = now;
-
         res.json(admins);
     } catch (error) {
-        if (error.status === 429) {
-            return res.status(429).json({ error: "Zbyt wiele zapytań. Spróbuj za chwilę.", retryAfter: error.retry_after });
-        }
         res.status(500).json({ error: "Błąd pobierania danych" });
     }
 });
@@ -116,6 +104,34 @@ app.post('/github-webhook', async (req, res) => {
         res.status(200).send('OK');
     } catch (error) {
         res.status(500).send('Error');
+    }
+});
+
+// NOWY ENDPOINT DLA STRONY WWW
+app.post('/website-update', async (req, res) => {
+    try {
+        const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
+        const channel = guild.channels.cache.find(ch => ch.name === WEBSITE_CHANNEL_NAME);
+        
+        if (!channel) return res.status(404).json({ error: "Nie znaleziono kanału 'strona'" });
+
+        const embed = new EmbedBuilder()
+            .setColor(0x2ecc71) // Zielony kolor dla strony
+            .setTitle('🌐 Aktualizacja Strony WWW')
+            .setURL('https://resdextoes.github.io/FC_Drewno/')
+            .setAuthor({ name: 'FC Drewno', iconURL: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png' })
+            .setDescription('Nowa wersja strony jest już dostępna online!')
+            .addFields(
+                { name: 'Adres strony', value: '[resdextoes.github.io/FC_Drewno](https://resdextoes.github.io/FC_Drewno/)' },
+                { name: 'Status', value: '🟢 Live', inline: true }
+            )
+            .setTimestamp()
+            .setFooter({ text: 'FC Drewno System' });
+
+        await channel.send({ embeds: [embed] });
+        res.status(200).json({ message: "Wysłano powiadomienie" });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
