@@ -16,12 +16,14 @@ const client = new Client({
     ]
 });
 
+// --- KONFIGURACJA ---
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041200';
+// --------------------
 
 client.once('ready', () => {
-    console.log(`Bot online: ${client.user.tag}`);
+    console.log(`Bot online jako: ${client.user.tag}`);
 });
 
 app.get('/admins', async (req, res) => {
@@ -38,21 +40,29 @@ app.get('/admins', async (req, res) => {
             }));
         res.json(admins);
     } catch (error) {
-        res.status(500).json({ error: 'Error' });
+        console.error('Błąd /admins:', error.message);
+        res.status(500).json({ error: 'Błąd pobierania adminów' });
     }
 });
 
 app.post('/github-webhook', async (req, res) => {
     try {
         const data = req.body;
-        if (!data.commits) return res.status(200).send('OK');
+        
+        // Diagnostyka w logach Render
+        console.log("--- SPRAWDZANIE DOSTĘPNYCH KANAŁÓW ---");
+        client.channels.cache.forEach(ch => {
+            if (ch.type === 0) console.log(`Dostępny kanał: #${ch.name} | ID: ${ch.id}`);
+        });
+        console.log("-------------------------------------");
 
-        // Próba pobrania kanału
+        if (!data.commits) return res.status(200).send('Brak commitów');
+
         const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
 
         if (!channel) {
-            console.log(`BŁĄD: Nie znaleziono kanału ${ANNOUNCEMENT_CHANNEL_ID}`);
-            return res.status(404).send('Channel not found');
+            console.error(`BŁĄD: Bot nie widzi kanału o ID ${ANNOUNCEMENT_CHANNEL_ID}`);
+            return res.status(404).send('Nie znaleziono kanału');
         }
 
         for (const commit of data.commits) {
@@ -62,18 +72,19 @@ app.post('/github-webhook', async (req, res) => {
                             `> ${commit.url}`;
             await channel.send(message);
         }
+        
         res.status(200).send('OK');
     } catch (error) {
-        console.error("Błąd wysyłania:", error);
-        res.status(500).send('Error');
+        console.error("Błąd webhooka:", error.message);
+        res.status(500).send('Błąd serwera');
     }
 });
 
-app.get('/', (req, res) => res.send('API is running'));
+app.get('/', (req, res) => res.send('System bota działa poprawnie.'));
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Serwer działa na porcie ${PORT}`);
+    console.log(`Serwer Express działa na porcie ${PORT}`);
 });
 
 client.login(process.env.DISCORD_TOKEN);
