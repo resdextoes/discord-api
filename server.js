@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import express from 'express';
 import cors from 'cors';
 
@@ -16,14 +16,43 @@ const client = new Client({
     ]
 });
 
-// --- KONFIGURACJA ---
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164';
-// --------------------
 
-client.once('ready', () => {
-    console.log(`Bot online jako: ${client.user.tag}`);
+const commands = [
+    new SlashCommandBuilder()
+        .setName('clear')
+        .setDescription('Usuwa wiadomości')
+        .addIntegerOption(option => 
+            option.setName('amount')
+                .setDescription('Liczba (1-100)')
+                .setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+].map(command => command.toJSON());
+
+client.once('ready', async () => {
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    try {
+        await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
+        console.log(`Bot online: ${client.user.tag}`);
+    } catch (error) {
+        console.error(error);
+    }
+});
+
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+    if (interaction.commandName === 'clear') {
+        const amount = interaction.options.getInteger('amount');
+        if (amount < 1 || amount > 100) return interaction.reply({ content: '1-100', ephemeral: true });
+        try {
+            const messages = await interaction.channel.bulkDelete(amount, true);
+            await interaction.reply({ content: `Usunięto ${messages.size}`, ephemeral: true });
+        } catch (error) {
+            await interaction.reply({ content: 'Błąd (wiadomości starsze niż 14 dni?)', ephemeral: true });
+        }
+    }
 });
 
 app.get('/admins', async (req, res) => {
@@ -40,51 +69,29 @@ app.get('/admins', async (req, res) => {
             }));
         res.json(admins);
     } catch (error) {
-        console.error('Błąd /admins:', error.message);
-        res.status(500).json({ error: 'Błąd pobierania adminów' });
+        res.status(500).json({ error: 'Error' });
     }
 });
 
 app.post('/github-webhook', async (req, res) => {
     try {
         const data = req.body;
-        
-        // Diagnostyka w logach Render
-        console.log("--- SPRAWDZANIE DOSTĘPNYCH KANAŁÓW ---");
-        client.channels.cache.forEach(ch => {
-            if (ch.type === 0) console.log(`Dostępny kanał: #${ch.name} | ID: ${ch.id}`);
-        });
-        console.log("-------------------------------------");
-
-        if (!data.commits) return res.status(200).send('Brak commitów');
-
+        if (!data.commits) return res.status(200).send('OK');
         const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
-
-        if (!channel) {
-            console.error(`BŁĄD: Bot nie widzi kanału o ID ${ANNOUNCEMENT_CHANNEL_ID}`);
-            return res.status(404).send('Nie znaleziono kanału');
-        }
-
+        if (!channel) return res.status(404).send('Error');
         for (const commit of data.commits) {
-            const message = `🛠️ **[${data.repository.name}]** Nowy commit!\n` +
-                            `> **Autor:** ${commit.author.name}\n` +
-                            `> **Wiadomość:** ${commit.message}\n` +
-                            `> ${commit.url}`;
+            const message = `🛠️ **[${data.repository.name}]** Nowy commit!\n> **Autor:** ${commit.author.name}\n> **Wiadomość:** ${commit.message}\n> ${commit.url}`;
             await channel.send(message);
         }
-        
         res.status(200).send('OK');
     } catch (error) {
-        console.error("Błąd webhooka:", error.message);
-        res.status(500).send('Błąd serwera');
+        res.status(500).send('Error');
     }
 });
 
-app.get('/', (req, res) => res.send('System bota działa poprawnie.'));
+app.get('/', (req, res) => res.send('OK'));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Serwer Express działa na porcie ${PORT}`);
-});
+app.listen(PORT, '0.0.0.0', () => console.log(`Port: ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN);
