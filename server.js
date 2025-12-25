@@ -50,19 +50,20 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: 'Podaj liczbę 1-100', flags: [MessageFlags.Ephemeral] }).catch(() => {});
         }
 
+        let hasResponded = false;
+
         try {
-            // Natychmiastowe poinformowanie Discorda, że pracujemy (zapobiega wygaśnięciu)
-            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => { hasResponded = true; });
             
             const deleted = await interaction.channel.bulkDelete(amount, true);
             
-            await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` }).catch(() => {});
+            if (!hasResponded) {
+                await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` }).catch(() => {});
+                hasResponded = true;
+            }
         } catch (error) {
-            console.error('Błąd podczas clear:', error);
-            if (interaction.deferred || interaction.replied) {
-                await interaction.editReply({ content: 'Błąd: Nie można usunąć starszych wiadomości.' }).catch(() => {});
-            } else {
-                await interaction.reply({ content: 'Wystąpił błąd.', flags: [MessageFlags.Ephemeral] }).catch(() => {});
+            if (!hasResponded) {
+                await interaction.editReply({ content: 'Błąd: Nie można usunąć wiadomości starszych niż 14 dni.' }).catch(() => {});
             }
         }
     }
