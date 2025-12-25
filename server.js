@@ -20,6 +20,19 @@ const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164';
 
+// Zmienne do buforowania danych
+let cachedAdmins = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 60000; // 1 minuta (w milisekundach)
+
+client.once('ready', async () => {
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    try {
+        await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
+        console.log(`Bot online: ${client.user.tag}`);
+    } catch (error) {}
+});
+
 const commands = [
     new SlashCommandBuilder()
         .setName('clear')
@@ -31,21 +44,10 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
 ].map(command => command.toJSON());
 
-client.once('ready', async () => {
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    try {
-        await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-        console.log(`Bot online: ${client.user.tag}`);
-    } catch (error) {
-        console.error('Błąd rejestracji komend:', error);
-    }
-});
-
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'clear') {
         const amount = interaction.options.getInteger('amount');
-        if (amount < 1 || amount > 100) return interaction.reply({ content: '1-100', flags: [MessageFlags.Ephemeral] }).catch(() => {});
         let responded = false;
         try {
             await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => { responded = true; });
@@ -62,14 +64,16 @@ client.on('interactionCreate', async interaction => {
 
 app.get('/admins', async (req, res) => {
     try {
-        const guild = await client.guilds.fetch(GUILD_ID).catch(() => null);
-        if (!guild) return res.status(404).json({ error: "Nie znaleziono serwera" });
+        const now = Date.now();
+        
+        // Jeśli mamy świeże dane w pamięci, wyślij je zamiast pytać Discorda
+        if (cachedAdmins && (now - lastFetchTime < CACHE_DURATION)) {
+            return res.json(cachedAdmins);
+        }
 
-        const members = await guild.members.fetch().catch(err => {
-            console.error("BŁĄD FETCH MEMBERS:", err.message);
-            throw err;
-        });
-
+        const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
+        const members = await guild.members.fetch();
+        
         const admins = members
             .filter(m => m.roles.cache.has(ROLE_ID))
             .map(m => ({
@@ -78,10 +82,17 @@ app.get('/admins', async (req, res) => {
                 avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 }),
                 status: m.presence ? m.presence.status : 'offline'
             }));
+
+        // Zapisz do bufora
+        cachedAdmins = admins;
+        lastFetchTime = now;
+
         res.json(admins);
     } catch (error) {
-        console.error("Szczegóły błędu /admins:", error);
-        res.status(500).json({ error: error.message });
+        if (error.status === 429) {
+            return res.status(429).json({ error: "Zbyt wiele zapytań. Spróbuj za chwilę.", retryAfter: error.retry_after });
+        }
+        res.status(500).json({ error: "Błąd pobierania danych" });
     }
 });
 
