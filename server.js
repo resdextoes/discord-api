@@ -45,23 +45,19 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'clear') {
         const amount = interaction.options.getInteger('amount');
-        
         if (amount < 1 || amount > 100) {
             return interaction.reply({ content: 'Podaj liczbę 1-100', flags: [MessageFlags.Ephemeral] });
         }
 
         try {
-            // Najpierw usuwamy wiadomości
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
             const deleted = await interaction.channel.bulkDelete(amount, true);
-            
-            // Dopiero po usunięciu odpowiadamy (jeśli jeszcze nie odpowiedzieliśmy)
-            if (!interaction.replied) {
-                await interaction.reply({ content: `Usunięto ${deleted.size} wiadomości.`, flags: [MessageFlags.Ephemeral] });
-            }
+            await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` });
         } catch (error) {
-            console.error('Błąd clear:', error);
-            if (!interaction.replied) {
-                await interaction.reply({ content: 'Błąd: Wiadomości starsze niż 14 dni?', flags: [MessageFlags.Ephemeral] });
+            if (interaction.deferred) {
+                await interaction.editReply({ content: 'Błąd: Wiadomości starsze niż 14 dni nie mogą zostać usunięte.' });
+            } else {
+                await interaction.reply({ content: 'Wystąpił błąd.', flags: [MessageFlags.Ephemeral] });
             }
         }
     }
@@ -107,7 +103,6 @@ app.post('/github-webhook', async (req, res) => {
                     { name: 'Repozytorium', value: `[Link](${data.repository.html_url})`, inline: true }
                 )
                 .setTimestamp();
-
             await channel.send({ embeds: [embed] });
         }
         res.status(200).send('OK');
