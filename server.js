@@ -16,7 +16,7 @@ const client = new Client({
 
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
-const ANNOUNCEMENT_CHANNEL_ID = 'TUTAJ_WPISZ_ID_KANALU';
+const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164';
 
 client.once('ready', () => {
     console.log(`Bot online: ${client.user.tag}`);
@@ -48,7 +48,7 @@ app.post('/github-webhook', async (req, res) => {
         const data = req.body;
 
         if (data.commits && data.commits.length > 0) {
-            const channel = await client.channels.fetch(1453854451961041164);
+            const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID);
             const repoName = data.repository.full_name;
 
             if (channel) {
