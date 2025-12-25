@@ -1,56 +1,17 @@
-import { Client, GatewayIntentBits } from 'discord.js';
-import express from 'express';
-import cors from 'cors';
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildPresences
-    ]
-});
-
-const GUILD_ID = '1439591884287639694';
-const ROLE_ID = '1439593337488150568';
-const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164';
-
-client.once('ready', () => {
-    console.log(`Bot online: ${client.user.tag}`);
-});
-
-app.get('/admins', async (req, res) => {
-    try {
-        const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
-        const members = await guild.members.fetch();
-        const admins = members
-            .filter(member => member.roles.cache.has(ROLE_ID))
-            .map(member => ({
-                id: member.id,
-                username: member.user.username,
-                avatar: member.user.displayAvatarURL({ extension: 'png', size: 128 }),
-                status: member.presence ? member.presence.status : 'offline'
-            }));
-        res.json(admins);
-    } catch (error) {
-        res.status(500).json({ error: 'Error' });
-    }
-});
-
 app.post('/github-webhook', async (req, res) => {
     try {
         const data = req.body;
         if (!data.commits) return res.status(200).send('OK');
 
-        // WYMUSZONE POBIERANIE (FETCH) ZAMIAST CACHE
+        // DIAGNOSTYKA: Wypisuje wszystkie dostępne kanały w logach Render
+        console.log("--- DIAGNOSTYKA KANAŁÓW ---");
+        client.channels.cache.forEach(ch => console.log(`Widzę kanał: ${ch.name} (ID: ${ch.id})`));
+        console.log("---------------------------");
+
         const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
 
         if (!channel) {
-            console.error("LOG: Nadal nie znaleziono kanału przez fetch.");
-            return res.status(404).send('Channel not found');
+            return res.status(404).send(`Nie znaleziono kanału o ID: ${ANNOUNCEMENT_CHANNEL_ID}`);
         }
 
         for (const commit of data.commits) {
@@ -62,14 +23,7 @@ app.post('/github-webhook', async (req, res) => {
         }
         res.status(200).send('OK');
     } catch (error) {
-        console.error("Błąd wysyłania:", error);
+        console.error("Błąd:", error.message);
         res.status(500).send('Error');
     }
 });
-
-app.get('/', (req, res) => res.send('OK'));
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Port: ${PORT}`));
-
-client.login(process.env.DISCORD_TOKEN);
