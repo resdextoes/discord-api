@@ -46,15 +46,15 @@ client.on('interactionCreate', async interaction => {
     if (interaction.commandName === 'clear') {
         const amount = interaction.options.getInteger('amount');
         if (amount < 1 || amount > 100) {
-            return interaction.reply({ content: 'Podaj liczbę 1-100', flags: MessageFlags.Ephemeral });
+            return interaction.reply({ content: 'Podaj liczbę 1-100', flags: [MessageFlags.Ephemeral] });
         }
         
         try {
             const messages = await interaction.channel.bulkDelete(amount, true);
-            await interaction.reply({ content: `Usunięto ${messages.size} wiadomości.`, flags: MessageFlags.Ephemeral });
+            return interaction.reply({ content: `Usunięto ${messages.size} wiadomości.`, flags: [MessageFlags.Ephemeral] });
         } catch (error) {
-            if (!interaction.replied) {
-                await interaction.reply({ content: 'Błąd: Wiadomości starsze niż 14 dni?', flags: MessageFlags.Ephemeral });
+            if (!interaction.replied && !interaction.deferred) {
+                return interaction.reply({ content: 'Błąd: Wiadomości starsze niż 14 dni?', flags: [MessageFlags.Ephemeral] });
             }
         }
     }
