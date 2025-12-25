@@ -31,7 +31,7 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
 ].map(command => command.toJSON());
 
-client.once('clientReady', async () => {
+client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
         await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
@@ -45,17 +45,24 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'clear') {
         const amount = interaction.options.getInteger('amount');
+        
         if (amount < 1 || amount > 100) {
             return interaction.reply({ content: 'Podaj liczbę 1-100', flags: [MessageFlags.Ephemeral] });
         }
 
-        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-        
         try {
-            const messages = await interaction.channel.bulkDelete(amount, true);
-            return interaction.editReply({ content: `Usunięto ${messages.size} wiadomości.` });
+            // Najpierw usuwamy wiadomości
+            const deleted = await interaction.channel.bulkDelete(amount, true);
+            
+            // Dopiero po usunięciu odpowiadamy (jeśli jeszcze nie odpowiedzieliśmy)
+            if (!interaction.replied) {
+                await interaction.reply({ content: `Usunięto ${deleted.size} wiadomości.`, flags: [MessageFlags.Ephemeral] });
+            }
         } catch (error) {
-            return interaction.editReply({ content: 'Błąd: Wiadomości starsze niż 14 dni?' });
+            console.error('Błąd clear:', error);
+            if (!interaction.replied) {
+                await interaction.reply({ content: 'Błąd: Wiadomości starsze niż 14 dni?', flags: [MessageFlags.Ephemeral] });
+            }
         }
     }
 });
