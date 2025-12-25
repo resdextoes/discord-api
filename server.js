@@ -16,7 +16,7 @@ const client = new Client({
 
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
-const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041200';
+const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164';
 
 client.once('ready', () => {
     console.log(`Bot online: ${client.user.tag}`);
