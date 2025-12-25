@@ -45,19 +45,24 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'clear') {
         const amount = interaction.options.getInteger('amount');
+        
         if (amount < 1 || amount > 100) {
-            return interaction.reply({ content: 'Podaj liczbę 1-100', flags: [MessageFlags.Ephemeral] });
+            return interaction.reply({ content: 'Podaj liczbę 1-100', flags: [MessageFlags.Ephemeral] }).catch(() => {});
         }
 
         try {
-            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+            // Natychmiastowe poinformowanie Discorda, że pracujemy (zapobiega wygaśnięciu)
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => {});
+            
             const deleted = await interaction.channel.bulkDelete(amount, true);
-            await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` });
+            
+            await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` }).catch(() => {});
         } catch (error) {
-            if (interaction.deferred) {
-                await interaction.editReply({ content: 'Błąd: Wiadomości starsze niż 14 dni nie mogą zostać usunięte.' });
+            console.error('Błąd podczas clear:', error);
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: 'Błąd: Nie można usunąć starszych wiadomości.' }).catch(() => {});
             } else {
-                await interaction.reply({ content: 'Wystąpił błąd.', flags: [MessageFlags.Ephemeral] });
+                await interaction.reply({ content: 'Wystąpił błąd.', flags: [MessageFlags.Ephemeral] }).catch(() => {});
             }
         }
     }
