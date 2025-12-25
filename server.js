@@ -16,15 +16,18 @@ const client = new Client({
     ]
 });
 
+// Konfiguracja ID
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164'; 
 const WEBSITE_CHANNEL_NAME = 'strona';
 
+// Buforowanie dla /admins
 let cachedAdmins = null;
 let lastFetchTime = 0;
 const CACHE_DURATION = 60000;
 
+// Definicja komend
 const commands = [
     new SlashCommandBuilder()
         .setName('clear')
@@ -36,6 +39,7 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
 ].map(command => command.toJSON());
 
+// Rejestracja komend przy starcie
 client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
@@ -46,11 +50,13 @@ client.once('ready', async () => {
     }
 });
 
+// Obsługa komendy /clear
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'clear') {
         const amount = interaction.options.getInteger('amount');
         if (amount < 1 || amount > 100) return interaction.reply({ content: '1-100', flags: [MessageFlags.Ephemeral] }).catch(() => {});
+        
         let responded = false;
         try {
             await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => { responded = true; });
@@ -58,13 +64,14 @@ client.on('interactionCreate', async interaction => {
                 if (err.code === 10008) return new Map();
                 throw err;
             });
-            if (!responded) await interaction.editReply({ content: 'Wyczyszczono wiadomości.' }).catch(() => {});
+            if (!responded) await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` }).catch(() => {});
         } catch (error) {
-            if (!responded) await interaction.editReply({ content: 'Błąd podczas usuwania (wiadomości starsze niż 14 dni?).' }).catch(() => {});
+            if (!responded) await interaction.editReply({ content: 'Błąd usuwania (wiadomości mogą być starsze niż 14 dni).' }).catch(() => {});
         }
     }
 });
 
+// Endpoint dla listy adminów
 app.get('/admins', async (req, res) => {
     try {
         const now = Date.now();
@@ -87,6 +94,7 @@ app.get('/admins', async (req, res) => {
     }
 });
 
+// Webhook GitHub Commits
 app.post('/github-webhook', async (req, res) => {
     try {
         const data = req.body;
@@ -100,7 +108,10 @@ app.post('/github-webhook', async (req, res) => {
                 .setTitle(`🛠️ Nowy commit: ${data.repository.name}`)
                 .setURL(commit.url)
                 .setDescription(`**Wiadomość:**\n${commit.message}`)
-                .addFields({ name: 'Gałąź', value: `\`${data.ref.split('/').pop()}\``, inline: true }, { name: 'Repozytorium', value: `[Link](${data.repository.html_url})`, inline: true })
+                .addFields(
+                    { name: 'Gałąź', value: `\`${data.ref.split('/').pop()}\``, inline: true }, 
+                    { name: 'Repozytorium', value: `[Link](${data.repository.html_url})`, inline: true }
+                )
                 .setTimestamp();
             await channel.send({ embeds: [embed] });
         }
@@ -110,12 +121,13 @@ app.post('/github-webhook', async (req, res) => {
     }
 });
 
-app.post('/website-update', async (req, res) => {
+// Logika aktualizacji wiadomości o stronie
+async function updateWebsiteStatus() {
     try {
         const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
         const channel = guild.channels.cache.find(ch => ch.name === WEBSITE_CHANNEL_NAME);
         
-        if (!channel) return res.status(404).json({ error: "Nie znaleziono kanału 'strona'" });
+        if (!channel) return console.log("Nie znaleziono kanału 'strona'.");
 
         const embed = new EmbedBuilder()
             .setColor(0x2ecc71)
@@ -125,25 +137,29 @@ app.post('/website-update', async (req, res) => {
             .setDescription('Strona jest stale aktualizowana. Kliknij w tytuł lub link poniżej, aby przejść do serwisu.')
             .addFields(
                 { name: 'Adres strony', value: '[resdextoes.github.io/FC_Drewno](https://resdextoes.github.io/FC_Drewno/)' },
-                { name: 'Ostatnia aktualizacja', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
-                { name: 'Status', value: '🟢 Online', inline: true }
+                { name: 'Ostatnia auto-aktualizacja', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+                { name: 'Status bota', value: '🟢 Aktywny', inline: true }
             )
             .setTimestamp()
-            .setFooter({ text: 'Ostatnio odświeżono' });
+            .setFooter({ text: 'System automatycznego odświeżania' });
 
         const messages = await channel.messages.fetch({ limit: 20 });
         const lastBotMessage = messages.find(m => m.author.id === client.user.id);
 
         if (lastBotMessage) {
             await lastBotMessage.edit({ embeds: [embed] });
-            res.status(200).json({ message: "Zaktualizowano" });
         } else {
             await channel.send({ embeds: [embed] });
-            res.status(200).json({ message: "Wysłano nową" });
         }
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("Błąd auto-aktualizacji:", error.message);
     }
+}
+
+// Endpoint do ręcznego wymuszenia aktualizacji strony
+app.post('/website-update', async (req, res) => {
+    await updateWebsiteStatus();
+    res.status(200).json({ message: "Zaktualizowano status strony." });
 });
 
 app.get('/', (req, res) => res.send('OK'));
@@ -151,4 +167,10 @@ app.get('/', (req, res) => res.send('OK'));
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Port: ${PORT}`));
 
-client.login(process.env.DISCORD_TOKEN);
+// Logowanie i start pętli
+client.login(process.env.DISCORD_TOKEN).then(() => {
+    // Pierwsza aktualizacja po 5 sekundach od startu
+    setTimeout(updateWebsiteStatus, 5000);
+    // Kolejne co 5 minut
+    setInterval(updateWebsiteStatus, 300000); 
+});
