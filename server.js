@@ -55,9 +55,8 @@ client.on('interactionCreate', async interaction => {
         try {
             await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => { hasResponded = true; });
             
-            // Filtrowanie błędów przy usuwaniu
             const deleted = await interaction.channel.bulkDelete(amount, true).catch(err => {
-                if (err.code === 10008) return new Map(); // Ignoruj Unknown Message
+                if (err.code === 10008) return new Map();
                 throw err;
             });
             
