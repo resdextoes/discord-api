@@ -27,7 +27,6 @@ app.get('/admins', async (req, res) => {
         const guild = client.guilds.cache.get(GUILD_ID);
         if (!guild) return res.status(404).json({ error: 'Guild not found' });
 
-        // Używamy TYLKO cache. Nie robimy fetch(), żeby uniknąć Rate Limit.
         const admins = guild.members.cache
             .filter(member => member.roles.cache.has(ROLE_ID))
             .map(member => ({
@@ -48,10 +47,13 @@ app.post('/github-webhook', async (req, res) => {
         const data = req.body;
         if (!data.commits) return res.status(200).send('OK');
 
-        const channel = client.channels.cache.get(ANNOUNCEMENT_CHANNEL_ID) || 
-                        await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
+        // Próba znalezienia kanału w pamięci bota
+        const channel = client.channels.cache.get(ANNOUNCEMENT_CHANNEL_ID);
 
-        if (!channel) return res.status(404).send('Channel not found');
+        if (!channel) {
+            console.error(`BŁĄD: Bot nie widzi kanału ${ANNOUNCEMENT_CHANNEL_ID}`);
+            return res.status(404).send('Channel not found in cache');
+        }
 
         for (const commit of data.commits) {
             const message = `🛠️ **[${data.repository.name}]** Nowy commit!\n` +
