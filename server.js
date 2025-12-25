@@ -16,7 +16,7 @@ const client = new Client({
 
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
-const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164';
+const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041200';
 
 client.once('ready', () => {
     console.log(`Bot online: ${client.user.tag}`);
@@ -24,10 +24,11 @@ client.once('ready', () => {
 
 app.get('/admins', async (req, res) => {
     try {
-        const guild = await client.guilds.fetch(GUILD_ID);
-        const members = await guild.members.fetch({ withPresences: true });
-        
-        const admins = members
+        const guild = client.guilds.cache.get(GUILD_ID);
+        if (!guild) return res.status(404).json({ error: 'Guild not found' });
+
+        // Używamy TYLKO cache. Nie robimy fetch(), żeby uniknąć Rate Limit.
+        const admins = guild.members.cache
             .filter(member => member.roles.cache.has(ROLE_ID))
             .map(member => ({
                 id: member.id,
@@ -38,44 +39,36 @@ app.get('/admins', async (req, res) => {
 
         res.json(admins);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Error' });
     }
 });
 
 app.post('/github-webhook', async (req, res) => {
     try {
         const data = req.body;
+        if (!data.commits) return res.status(200).send('OK');
 
-        if (data.commits && data.commits.length > 0) {
-            const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID);
-            const repoName = data.repository.full_name;
+        const channel = client.channels.cache.get(ANNOUNCEMENT_CHANNEL_ID) || 
+                        await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
 
-            if (channel) {
-                for (const commit of data.commits) {
-                    const message = `🛠️ **Nowy commit w [${repoName}]**\n` +
-                                    `> **Autor:** ${commit.author.name}\n` +
-                                    `> **Wiadomość:** ${commit.message}\n` +
-                                    `> **Link:** ${commit.url}`;
-                    
-                    await channel.send(message);
-                }
-            }
+        if (!channel) return res.status(404).send('Channel not found');
+
+        for (const commit of data.commits) {
+            const message = `🛠️ **[${data.repository.name}]** Nowy commit!\n` +
+                            `> **Autor:** ${commit.author.name}\n` +
+                            `> **Wiadomość:** ${commit.message}\n` +
+                            `> ${commit.url}`;
+            await channel.send(message);
         }
         res.status(200).send('OK');
     } catch (error) {
-        console.error(error);
         res.status(500).send('Error');
     }
 });
 
-app.get('/', (req, res) => {
-    res.send('API is running');
-});
+app.get('/', (req, res) => res.send('OK'));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+app.listen(PORT, '0.0.0.0', () => console.log(`Port: ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN);
