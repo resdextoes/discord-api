@@ -4,6 +4,7 @@ import cors from 'cors';
 
 const app = express();
 app.use(cors());
+app.use(express.json());
 
 const client = new Client({
     intents: [
@@ -15,6 +16,7 @@ const client = new Client({
 
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
+const ANNOUNCEMENT_CHANNEL_ID = 'TUTAJ_WPISZ_ID_KANALU';
 
 client.once('ready', () => {
     console.log(`Bot online: ${client.user.tag}`);
@@ -38,6 +40,32 @@ app.get('/admins', async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.post('/github-webhook', async (req, res) => {
+    try {
+        const data = req.body;
+
+        if (data.commits && data.commits.length > 0) {
+            const channel = await client.channels.fetch(1453854451961041164);
+            const repoName = data.repository.full_name;
+
+            if (channel) {
+                for (const commit of data.commits) {
+                    const message = `🛠️ **Nowy commit w [${repoName}]**\n` +
+                                    `> **Autor:** ${commit.author.name}\n` +
+                                    `> **Wiadomość:** ${commit.message}\n` +
+                                    `> **Link:** ${commit.url}`;
+                    
+                    await channel.send(message);
+                }
+            }
+        }
+        res.status(200).send('OK');
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('Error');
     }
 });
 
