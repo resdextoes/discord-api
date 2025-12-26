@@ -16,18 +16,15 @@ const client = new Client({
     ]
 });
 
-// Konfiguracja ID
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164'; 
 const WEBSITE_CHANNEL_NAME = 'strona';
 
-// Buforowanie dla /admins
 let cachedAdmins = null;
 let lastFetchTime = 0;
 const CACHE_DURATION = 60000;
 
-// Definicja komend
 const commands = [
     new SlashCommandBuilder()
         .setName('clear')
@@ -39,18 +36,16 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
 ].map(command => command.toJSON());
 
-// Rejestracja komend przy starcie
 client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
         await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
         console.log(`Bot online: ${client.user.tag}`);
     } catch (error) {
-        console.error('Błąd rejestracji komend:', error);
+        console.error(error);
     }
 });
 
-// Obsługa komendy /clear
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'clear') {
@@ -66,12 +61,11 @@ client.on('interactionCreate', async interaction => {
             });
             if (!responded) await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` }).catch(() => {});
         } catch (error) {
-            if (!responded) await interaction.editReply({ content: 'Błąd usuwania (usuwane wiadomości nie mogą być starsze niż 14 dni).' }).catch(() => {});
+            if (!responded) await interaction.editReply({ content: 'Błąd usuwania.' }).catch(() => {});
         }
     }
 });
 
-// Endpoint dla listy adminów
 app.get('/admins', async (req, res) => {
     try {
         const now = Date.now();
@@ -79,12 +73,16 @@ app.get('/admins', async (req, res) => {
 
         const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
         const members = await guild.members.fetch();
-        const admins = members.filter(m => m.roles.cache.has(ROLE_ID)).map(m => ({
-            id: m.id,
-            username: m.user.username,
-            avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 }),
-            status: m.presence ? m.presence.status : 'offline'
-        }));
+        const admins = members.filter(m => m.roles.cache.has(ROLE_ID)).map(m => {
+            const activity = m.presence?.activities.find(act => act.type === 0);
+            return {
+                id: m.id,
+                username: m.user.username,
+                avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 }),
+                status: m.presence ? m.presence.status : 'offline',
+                game: activity ? activity.name : null
+            };
+        });
 
         cachedAdmins = admins;
         lastFetchTime = now;
@@ -94,7 +92,6 @@ app.get('/admins', async (req, res) => {
     }
 });
 
-// Webhook GitHub Commits
 app.post('/github-webhook', async (req, res) => {
     try {
         const data = req.body;
@@ -121,20 +118,18 @@ app.post('/github-webhook', async (req, res) => {
     }
 });
 
-// Logika aktualizacji wiadomości o stronie
 async function updateWebsiteStatus() {
     try {
         const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
         const channel = guild.channels.cache.find(ch => ch.name === WEBSITE_CHANNEL_NAME);
-        
-        if (!channel) return console.log("Nie znaleziono kanału 'strona'.");
+        if (!channel) return;
 
         const embed = new EmbedBuilder()
             .setColor(0x2ecc71)
             .setTitle('🌐 Oficjalna Strona FC Drewno')
             .setURL('https://resdextoes.github.io/FC_Drewno/')
             .setAuthor({ name: 'FC Drewno', iconURL: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png' })
-            .setDescription('Strona jest stale aktualizowana. Kliknij w tytuł lub link poniżej, aby przejść do serwisu.')
+            .setDescription('Strona jest stale aktualizowana.')
             .addFields(
                 { name: 'Adres strony', value: '[resdextoes.github.io/FC_Drewno](https://resdextoes.github.io/FC_Drewno/)' },
                 { name: 'Ostatnia auto-aktualizacja', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
@@ -152,11 +147,10 @@ async function updateWebsiteStatus() {
             await channel.send({ embeds: [embed] });
         }
     } catch (error) {
-        console.error("Błąd auto-aktualizacji:", error.message);
+        console.error(error.message);
     }
 }
 
-// Endpoint do ręcznego wymuszenia aktualizacji strony
 app.post('/website-update', async (req, res) => {
     await updateWebsiteStatus();
     res.status(200).json({ message: "Zaktualizowano status strony." });
@@ -167,10 +161,7 @@ app.get('/', (req, res) => res.send('OK'));
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Port: ${PORT}`));
 
-// Logowanie i start pętli
 client.login(process.env.DISCORD_TOKEN).then(() => {
-    // Pierwsza aktualizacja po 5 sekundach od startu
     setTimeout(updateWebsiteStatus, 5000);
-    // Kolejne co 5 minut
     setInterval(updateWebsiteStatus, 300000); 
 });
