@@ -66,7 +66,7 @@ client.on('interactionCreate', async interaction => {
             });
             if (!responded) await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` }).catch(() => {});
         } catch (error) {
-            if (!responded) await interaction.editReply({ content: 'Błąd usuwania (wiadomości mogą być starsze niż 14 dni).' }).catch(() => {});
+            if (!responded) await interaction.editReply({ content: 'Błąd usuwania (usuwane wiadomości nie mogą być starsze niż 14 dni).' }).catch(() => {});
         }
     }
 });
