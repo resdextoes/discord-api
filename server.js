@@ -25,7 +25,7 @@ const APP_URL = process.env.APP_URL || `http://localhost:${process.env.PORT || 1
 
 let cachedAdmins = null;
 let lastFetchTime = 0;
-const CACHE_DURATION = 60000;
+const CACHE_DURATION = 1200000;
 
 const commands = [
     new SlashCommandBuilder()
@@ -177,5 +177,5 @@ app.listen(PORT, '0.0.0.0', () => console.log(`Port: ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN).then(() => {
     setTimeout(updateWebsiteStatus, 5000);
-    setInterval(updateWebsiteStatus, 300000); 
+    setInterval(updateWebsiteStatus, 60000); 
 });
