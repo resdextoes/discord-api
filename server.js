@@ -170,10 +170,11 @@ app.post('/website-update', async (req, res) => {
     res.status(200).json({ message: "OK" });
 });
 
-app.get('/', (req, res) => res.send('OK'));
+// ROZWIĄZANIE BŁĘDU 404: Endpoint dla strony głównej
+app.get('/', (req, res) => res.status(200).send('Bot is alive!'));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Port: ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Serwer HTTP nasłuchuje na porcie: ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN).then(() => {
     setTimeout(updateWebsiteStatus, 5000);
