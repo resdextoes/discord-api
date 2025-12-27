@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
 import express from 'express';
 import cors from 'cors';
+import axios from 'axios';
 
 const app = express();
 app.use(cors());
@@ -20,6 +21,7 @@ const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164'; 
 const WEBSITE_CHANNEL_NAME = 'strona';
+const APP_URL = process.env.APP_URL || `http://localhost:${process.env.PORT || 10000}`;
 
 let cachedAdmins = null;
 let lastFetchTime = 0;
@@ -36,11 +38,23 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
 ].map(command => command.toJSON());
 
+function startSelfPing() {
+    setInterval(async () => {
+        try {
+            await axios.get(APP_URL);
+            console.log('Self-ping OK');
+        } catch (error) {
+            console.error('Ping error:', error.message);
+        }
+    }, 600000);
+}
+
 client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
         await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
         console.log(`Bot online: ${client.user.tag}`);
+        startSelfPing();
     } catch (error) {
         console.error(error);
     }
@@ -88,7 +102,7 @@ app.get('/admins', async (req, res) => {
         lastFetchTime = now;
         res.json(admins);
     } catch (error) {
-        res.status(500).json({ error: "Błąd pobierania danych" });
+        res.status(500).json({ error: "Błąd" });
     }
 });
 
@@ -153,7 +167,7 @@ async function updateWebsiteStatus() {
 
 app.post('/website-update', async (req, res) => {
     await updateWebsiteStatus();
-    res.status(200).json({ message: "Zaktualizowano status strony." });
+    res.status(200).json({ message: "OK" });
 });
 
 app.get('/', (req, res) => res.send('OK'));
