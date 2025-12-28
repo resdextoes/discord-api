@@ -17,11 +17,14 @@ const client = new Client({
     ]
 });
 
+
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164'; 
 const WEBSITE_CHANNEL_NAME = 'strona';
-const APP_URL = process.env.APP_URL || `https://fc-drewno-bot.onrender.com`;
+
+
+const APP_URL = process.env.APP_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` || `https://discord-api-jqj5.onrender.com`;
 
 let cachedAdmins = null;
 let lastFetchTime = 0;
@@ -38,16 +41,20 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
 ].map(command => command.toJSON());
 
+
 function startSelfPing() {
+    if (!APP_URL || APP_URL.includes('undefined')) {
+        console.log('Self-ping wstrzymany: Brak poprawnego adresu URL.');
+        return;
+    }
+
     setInterval(() => {
-        if (!APP_URL.startsWith('http')) return;
-        
         https.get(APP_URL, (res) => {
-            console.log(`Self-ping status: ${res.statusCode}`);
+            console.log(`Self-ping OK: Status ${res.statusCode}`);
         }).on('error', (err) => {
             console.error('Ping error:', err.message);
         });
-    }, 120000); // 2 minuty
+    }, 120000); 
 }
 
 client.once('ready', async () => {
@@ -55,6 +62,7 @@ client.once('ready', async () => {
     try {
         await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
         console.log(`Bot online: ${client.user.tag}`);
+        console.log(`Pinguje adres: ${APP_URL}`);
         startSelfPing();
     } catch (error) {
         console.error(error);
@@ -65,18 +73,14 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'clear') {
         const amount = interaction.options.getInteger('amount');
-        if (amount < 1 || amount > 100) return interaction.reply({ content: '1-100', flags: [MessageFlags.Ephemeral] }).catch(() => {});
+        if (amount < 1 || amount > 100) return interaction.reply({ content: 'Podaj liczbę 1-100', flags: [MessageFlags.Ephemeral] }).catch(() => {});
         
-        let responded = false;
         try {
-            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }).catch(() => { responded = true; });
-            const deleted = await interaction.channel.bulkDelete(amount, true).catch(err => {
-                if (err.code === 10008) return new Map();
-                throw err;
-            });
-            if (!responded) await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` }).catch(() => {});
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+            const deleted = await interaction.channel.bulkDelete(amount, true);
+            await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` });
         } catch (error) {
-            if (!responded) await interaction.editReply({ content: 'Błąd usuwania.' }).catch(() => {});
+            await interaction.editReply({ content: 'Wystąpił błąd podczas usuwania (wiadomości mogą być starsze niż 14 dni).' }).catch(() => {});
         }
     }
 });
@@ -103,7 +107,7 @@ app.get('/admins', async (req, res) => {
         lastFetchTime = now;
         res.json(admins);
     } catch (error) {
-        res.status(500).json({ error: "Błąd" });
+        res.status(500).json({ error: "Błąd pobierania adminów" });
     }
 });
 
@@ -112,7 +116,8 @@ app.post('/github-webhook', async (req, res) => {
         const data = req.body;
         if (!data.commits) return res.status(200).send('OK');
         const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
-        if (!channel) return res.status(404).send('Error');
+        if (!channel) return res.status(404).send('Kanał nie istnieje');
+        
         for (const commit of data.commits) {
             const embed = new EmbedBuilder()
                 .setColor(0x0099ff)
@@ -129,7 +134,7 @@ app.post('/github-webhook', async (req, res) => {
         }
         res.status(200).send('OK');
     } catch (error) {
-        res.status(500).send('Error');
+        res.status(500).send('Błąd Webhooka');
     }
 });
 
@@ -153,7 +158,7 @@ async function updateWebsiteStatus() {
             .setTimestamp()
             .setFooter({ text: 'System automatycznego odświeżania' });
 
-        const messages = await channel.messages.fetch({ limit: 20 });
+        const messages = await channel.messages.fetch({ limit: 10 });
         const lastBotMessage = messages.find(m => m.author.id === client.user.id);
 
         if (lastBotMessage) {
@@ -162,24 +167,24 @@ async function updateWebsiteStatus() {
             await channel.send({ embeds: [embed] });
         }
     } catch (error) {
-        console.error(error.message);
+        console.error('Błąd aktualizacji strony:', error.message);
     }
 }
 
 app.post('/website-update', async (req, res) => {
     await updateWebsiteStatus();
-    res.status(200).json({ message: "OK" });
+    res.status(200).json({ message: "Zaktualizowano status" });
 });
 
-// ROZWIĄZANIE 404: Endpoint dla strony głównej
+
 app.get('/', (req, res) => {
     res.status(200).send('Bot is alive and pinging!');
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Serwer bota nasłuchuje na porcie: ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Serwer HTTP na porcie: ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN).then(() => {
     setTimeout(updateWebsiteStatus, 5000);
-    setInterval(updateWebsiteStatus, 60000); 
+    setInterval(updateWebsiteStatus, 300000); 
 });
