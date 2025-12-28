@@ -1,7 +1,7 @@
 import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
 import express from 'express';
 import cors from 'cors';
-import axios from 'axios';
+import https from 'https';
 
 const app = express();
 app.use(cors());
@@ -21,7 +21,7 @@ const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164'; 
 const WEBSITE_CHANNEL_NAME = 'strona';
-const APP_URL = process.env.APP_URL || `http://localhost:${process.env.PORT || 10000}`;
+const APP_URL = process.env.APP_URL || `https://fc-drewno-bot.onrender.com`;
 
 let cachedAdmins = null;
 let lastFetchTime = 0;
@@ -38,16 +38,16 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
 ].map(command => command.toJSON());
 
-// FUNKCJA SELF-PING (Ustawiona na 120000ms = 2 minuty)
 function startSelfPing() {
-    setInterval(async () => {
-        try {
-            await axios.get(APP_URL);
-            console.log('Self-ping OK (co 2 min)');
-        } catch (error) {
-            console.error('Ping error:', error.message);
-        }
-    }, 120000); 
+    setInterval(() => {
+        if (!APP_URL.startsWith('http')) return;
+        
+        https.get(APP_URL, (res) => {
+            console.log(`Self-ping status: ${res.statusCode}`);
+        }).on('error', (err) => {
+            console.error('Ping error:', err.message);
+        });
+    }, 120000); // 2 minuty
 }
 
 client.once('ready', async () => {
@@ -172,10 +172,12 @@ app.post('/website-update', async (req, res) => {
 });
 
 // ROZWIĄZANIE 404: Endpoint dla strony głównej
-app.get('/', (req, res) => res.status(200).send('Bot is alive!'));
+app.get('/', (req, res) => {
+    res.status(200).send('Bot is alive and pinging!');
+});
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Port: ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Serwer bota nasłuchuje na porcie: ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN).then(() => {
     setTimeout(updateWebsiteStatus, 5000);
