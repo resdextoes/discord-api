@@ -21,7 +21,7 @@ const client = new Client({
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164'; 
-const LOG_CHANNEL_ID = '1457442534396530809'; // Kanał dla logów mObywatela
+const LOG_CHANNEL_ID = '1457442534396530809'; 
 const WEBSITE_CHANNEL_NAME = 'strona';
 
 const APP_URL = process.env.APP_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` || `https://discord-api-jqj5.onrender.com`;
@@ -30,7 +30,6 @@ let cachedAdmins = null;
 let lastFetchTime = 0;
 const CACHE_DURATION = 1200000;
 
-// --- REJESTRACJA KOMEND ---
 const commands = [
     new SlashCommandBuilder()
         .setName('clear')
@@ -42,7 +41,6 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
 ].map(command => command.toJSON());
 
-// --- FUNKCJA PINGOWANIA ---
 function startSelfPing() {
     if (!APP_URL || APP_URL.includes('undefined')) return;
     setInterval(() => {
@@ -54,13 +52,13 @@ function startSelfPing() {
     }, 120000); 
 }
 
-// --- ENDPOINT: LOGOWANIE WEJŚĆ MOBYWATEL ---
+// --- ENDPOINT: LOGOWANIE WEJŚĆ ---
 app.post('/log-access', async (req, res) => {
     try {
         const { name, surname, page } = req.body;
         const channel = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
         
-        if (!channel) return res.status(404).json({ error: "Kanał logów nie istnieje" });
+        if (!channel) return res.status(404).json({ error: "Kanał nie istnieje" });
 
         const embed = new EmbedBuilder()
             .setColor(0x3498db)
@@ -70,59 +68,63 @@ app.post('/log-access', async (req, res) => {
                 { name: '📄 Widok', value: `\`${page}\``, inline: true },
                 { name: '⏰ Czas', value: `<t:${Math.floor(Date.now() / 1000)}:T> (<t:${Math.floor(Date.now() / 1000)}:R>)`, inline: false }
             )
-            .setThumbnail('https://github.com/resdextoes/FC_Drewno/raw/main/main/dowod_files/orzelek.png') // Opcjonalny obrazek orzełka
             .setTimestamp()
-            .setFooter({ text: 'System Logowania Dostępu mObywatel' });
+            .setFooter({ text: 'System Logowania Dostępu' });
 
         await channel.send({ embeds: [embed] });
         res.status(200).json({ status: 'success' });
     } catch (error) {
-        console.error('Błąd logowania wejścia:', error);
+        console.error('Błąd logowania:', error);
         res.status(500).json({ error: "Błąd serwera" });
     }
 });
 
-// --- POZOSTAŁE FUNKCJE I ENDPOINTY ---
+// --- KOMENDA CLEAR (POPRAWIONA) ---
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    if (interaction.commandName === 'clear') {
+        const amount = interaction.options.getInteger('amount');
+        
+        try {
+            // Sprawdzamy, czy już nie odpowiedziano na interakcję
+            if (interaction.deferred || interaction.replied) return;
+
+            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+            if (amount < 1 || amount > 100) {
+                return await interaction.editReply({ content: 'Podaj liczbę od 1 do 100.' });
+            }
+
+            const deleted = await interaction.channel.bulkDelete(amount, true);
+            await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` });
+        } catch (error) {
+            console.error('Błąd komendy clear:', error);
+            if (interaction.deferred) {
+                await interaction.editReply({ content: 'Wystąpił błąd (wiadomości mogą być starsze niż 14 dni).' }).catch(() => {});
+            }
+        }
+    }
+});
+
+// --- ADMINI I STATUS ---
 app.get('/admins', async (req, res) => {
     try {
         const now = Date.now();
         if (cachedAdmins && (now - lastFetchTime < CACHE_DURATION)) return res.json(cachedAdmins);
         const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
         const members = await guild.members.fetch();
-        const admins = members.filter(m => m.roles.cache.has(ROLE_ID)).map(m => {
-            const activity = m.presence?.activities.find(act => act.type === 0);
-            return {
-                id: m.id,
-                username: m.user.username,
-                avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 }),
-                status: m.presence ? m.presence.status : 'offline',
-                game: activity ? activity.name : null
-            };
-        });
+        const admins = members.filter(m => m.roles.cache.has(ROLE_ID)).map(m => ({
+            id: m.id,
+            username: m.user.username,
+            avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 }),
+            status: m.presence ? m.presence.status : 'offline',
+            game: m.presence?.activities.find(act => act.type === 0)?.name || null
+        }));
         cachedAdmins = admins;
         lastFetchTime = now;
         res.json(admins);
-    } catch (error) { res.status(500).json({ error: "Błąd pobierania" }); }
-});
-
-app.post('/github-webhook', async (req, res) => {
-    try {
-        const data = req.body;
-        if (!data.commits) return res.status(200).send('OK');
-        const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
-        if (!channel) return res.status(404).send('Brak kanału');
-        for (const commit of data.commits) {
-            const embed = new EmbedBuilder()
-                .setColor(0x0099ff)
-                .setTitle(`🛠️ Nowy commit: ${data.repository.name}`)
-                .setURL(commit.url)
-                .setDescription(`**Wiadomość:**\n${commit.message}`)
-                .addFields({ name: 'Gałąź', value: `\`${data.ref.split('/').pop()}\``, inline: true })
-                .setTimestamp();
-            await channel.send({ embeds: [embed] });
-        }
-        res.status(200).send('OK');
-    } catch (error) { res.status(500).send('Error'); }
+    } catch (error) { res.status(500).json({ error: "Błąd" }); }
 });
 
 async function updateWebsiteStatus() {
@@ -135,41 +137,34 @@ async function updateWebsiteStatus() {
             .setTitle('🌐 Oficjalna Strona FC Drewno')
             .setURL('https://resdextoes.github.io/FC_Drewno/')
             .addFields(
-                { name: 'Adres strony', value: '[resdextoes.github.io/FC_Drewno](https://resdextoes.github.io/FC_Drewno/)' },
-                { name: 'Ostatnia auto-aktualizacja', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+                { name: 'Adres strony', value: '[Kliknij tutaj](https://resdextoes.github.io/FC_Drewno/)' },
+                { name: 'Auto-aktualizacja', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
                 { name: 'Status bota', value: '🟢 Aktywny', inline: true }
             )
             .setTimestamp();
-        const messages = await channel.messages.fetch({ limit: 10 });
+
+        const messages = await channel.messages.fetch({ limit: 5 });
         const lastBotMessage = messages.find(m => m.author.id === client.user.id);
         if (lastBotMessage) await lastBotMessage.edit({ embeds: [embed] });
         else await channel.send({ embeds: [embed] });
-    } catch (e) { console.error(e.message); }
+    } catch (e) { console.error('Status Error:', e.message); }
 }
 
-app.get('/', (req, res) => res.status(200).send('Bot is alive!'));
-
-client.once('ready', async () => {
+// --- START ---
+client.once('clientReady', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-    console.log(`Bot online: ${client.user.tag}`);
-    startSelfPing();
+    try {
+        await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
+        console.log(`Bot online: ${client.user.tag}`);
+        startSelfPing();
+    } catch (error) { console.error(error); }
 });
 
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName === 'clear') {
-        const amount = interaction.options.getInteger('amount');
-        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-        const deleted = await interaction.channel.bulkDelete(amount, true);
-        await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` });
-    }
-});
-
+app.get('/', (req, res) => res.status(200).send('Bot is alive!'));
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Serwer na porcie: ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN).then(() => {
     setTimeout(updateWebsiteStatus, 5000);
-    setInterval(updateWebsiteStatus, 300000); 
+    setInterval(updateWebsiteStatus, 300000);
 });
