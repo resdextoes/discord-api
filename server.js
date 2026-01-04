@@ -17,12 +17,12 @@ const client = new Client({
     ]
 });
 
-
+// KONFIGURACJA ID
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164'; 
+const LOG_CHANNEL_ID = '1457442534396530809'; // Kanał dla logów mObywatela
 const WEBSITE_CHANNEL_NAME = 'strona';
-
 
 const APP_URL = process.env.APP_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` || `https://discord-api-jqj5.onrender.com`;
 
@@ -30,6 +30,7 @@ let cachedAdmins = null;
 let lastFetchTime = 0;
 const CACHE_DURATION = 1200000;
 
+// --- REJESTRACJA KOMEND ---
 const commands = [
     new SlashCommandBuilder()
         .setName('clear')
@@ -41,13 +42,9 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
 ].map(command => command.toJSON());
 
-
+// --- FUNKCJA PINGOWANIA ---
 function startSelfPing() {
-    if (!APP_URL || APP_URL.includes('undefined')) {
-        console.log('Self-ping wstrzymany: Brak poprawnego adresu URL.');
-        return;
-    }
-
+    if (!APP_URL || APP_URL.includes('undefined')) return;
     setInterval(() => {
         https.get(APP_URL, (res) => {
             console.log(`Self-ping OK: Status ${res.statusCode}`);
@@ -57,39 +54,39 @@ function startSelfPing() {
     }, 120000); 
 }
 
-client.once('ready', async () => {
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+// --- ENDPOINT: LOGOWANIE WEJŚĆ MOBYWATEL ---
+app.post('/log-access', async (req, res) => {
     try {
-        await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-        console.log(`Bot online: ${client.user.tag}`);
-        console.log(`Pinguje adres: ${APP_URL}`);
-        startSelfPing();
-    } catch (error) {
-        console.error(error);
-    }
-});
-
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName === 'clear') {
-        const amount = interaction.options.getInteger('amount');
-        if (amount < 1 || amount > 100) return interaction.reply({ content: 'Podaj liczbę 1-100', flags: [MessageFlags.Ephemeral] }).catch(() => {});
+        const { name, surname, page } = req.body;
+        const channel = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
         
-        try {
-            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-            const deleted = await interaction.channel.bulkDelete(amount, true);
-            await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` });
-        } catch (error) {
-            await interaction.editReply({ content: 'Wystąpił błąd podczas usuwania (wiadomości mogą być starsze niż 14 dni).' }).catch(() => {});
-        }
+        if (!channel) return res.status(404).json({ error: "Kanał logów nie istnieje" });
+
+        const embed = new EmbedBuilder()
+            .setColor(0x3498db)
+            .setTitle('🔓 Uzyskano dostęp do mObywatela')
+            .addFields(
+                { name: '👤 Osoba', value: `**${name} ${surname}**`, inline: true },
+                { name: '📄 Widok', value: `\`${page}\``, inline: true },
+                { name: '⏰ Czas', value: `<t:${Math.floor(Date.now() / 1000)}:T> (<t:${Math.floor(Date.now() / 1000)}:R>)`, inline: false }
+            )
+            .setThumbnail('https://github.com/resdextoes/FC_Drewno/raw/main/main/dowod_files/orzelek.png') // Opcjonalny obrazek orzełka
+            .setTimestamp()
+            .setFooter({ text: 'System Logowania Dostępu mObywatel' });
+
+        await channel.send({ embeds: [embed] });
+        res.status(200).json({ status: 'success' });
+    } catch (error) {
+        console.error('Błąd logowania wejścia:', error);
+        res.status(500).json({ error: "Błąd serwera" });
     }
 });
 
+// --- POZOSTAŁE FUNKCJE I ENDPOINTY ---
 app.get('/admins', async (req, res) => {
     try {
         const now = Date.now();
         if (cachedAdmins && (now - lastFetchTime < CACHE_DURATION)) return res.json(cachedAdmins);
-
         const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
         const members = await guild.members.fetch();
         const admins = members.filter(m => m.roles.cache.has(ROLE_ID)).map(m => {
@@ -102,13 +99,10 @@ app.get('/admins', async (req, res) => {
                 game: activity ? activity.name : null
             };
         });
-
         cachedAdmins = admins;
         lastFetchTime = now;
         res.json(admins);
-    } catch (error) {
-        res.status(500).json({ error: "Błąd pobierania adminów" });
-    }
+    } catch (error) { res.status(500).json({ error: "Błąd pobierania" }); }
 });
 
 app.post('/github-webhook', async (req, res) => {
@@ -116,26 +110,19 @@ app.post('/github-webhook', async (req, res) => {
         const data = req.body;
         if (!data.commits) return res.status(200).send('OK');
         const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
-        if (!channel) return res.status(404).send('Kanał nie istnieje');
-        
+        if (!channel) return res.status(404).send('Brak kanału');
         for (const commit of data.commits) {
             const embed = new EmbedBuilder()
                 .setColor(0x0099ff)
-                .setAuthor({ name: commit.author.name || 'GitHub', iconURL: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png' })
                 .setTitle(`🛠️ Nowy commit: ${data.repository.name}`)
                 .setURL(commit.url)
                 .setDescription(`**Wiadomość:**\n${commit.message}`)
-                .addFields(
-                    { name: 'Gałąź', value: `\`${data.ref.split('/').pop()}\``, inline: true }, 
-                    { name: 'Repozytorium', value: `[Link](${data.repository.html_url})`, inline: true }
-                )
+                .addFields({ name: 'Gałąź', value: `\`${data.ref.split('/').pop()}\``, inline: true })
                 .setTimestamp();
             await channel.send({ embeds: [embed] });
         }
         res.status(200).send('OK');
-    } catch (error) {
-        res.status(500).send('Błąd Webhooka');
-    }
+    } catch (error) { res.status(500).send('Error'); }
 });
 
 async function updateWebsiteStatus() {
@@ -143,46 +130,44 @@ async function updateWebsiteStatus() {
         const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
         const channel = guild.channels.cache.find(ch => ch.name === WEBSITE_CHANNEL_NAME);
         if (!channel) return;
-
         const embed = new EmbedBuilder()
             .setColor(0x2ecc71)
             .setTitle('🌐 Oficjalna Strona FC Drewno')
             .setURL('https://resdextoes.github.io/FC_Drewno/')
-            .setAuthor({ name: 'FC Drewno', iconURL: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png' })
-            .setDescription('Strona jest stale aktualizowana.')
             .addFields(
                 { name: 'Adres strony', value: '[resdextoes.github.io/FC_Drewno](https://resdextoes.github.io/FC_Drewno/)' },
                 { name: 'Ostatnia auto-aktualizacja', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
                 { name: 'Status bota', value: '🟢 Aktywny', inline: true }
             )
-            .setTimestamp()
-            .setFooter({ text: 'System automatycznego odświeżania' });
-
+            .setTimestamp();
         const messages = await channel.messages.fetch({ limit: 10 });
         const lastBotMessage = messages.find(m => m.author.id === client.user.id);
-
-        if (lastBotMessage) {
-            await lastBotMessage.edit({ embeds: [embed] });
-        } else {
-            await channel.send({ embeds: [embed] });
-        }
-    } catch (error) {
-        console.error('Błąd aktualizacji strony:', error.message);
-    }
+        if (lastBotMessage) await lastBotMessage.edit({ embeds: [embed] });
+        else await channel.send({ embeds: [embed] });
+    } catch (e) { console.error(e.message); }
 }
 
-app.post('/website-update', async (req, res) => {
-    await updateWebsiteStatus();
-    res.status(200).json({ message: "Zaktualizowano status" });
+app.get('/', (req, res) => res.status(200).send('Bot is alive!'));
+
+client.once('ready', async () => {
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
+    console.log(`Bot online: ${client.user.tag}`);
+    startSelfPing();
 });
 
-
-app.get('/', (req, res) => {
-    res.status(200).send('Bot is alive and pinging!');
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+    if (interaction.commandName === 'clear') {
+        const amount = interaction.options.getInteger('amount');
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+        const deleted = await interaction.channel.bulkDelete(amount, true);
+        await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` });
+    }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Serwer HTTP na porcie: ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Serwer na porcie: ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN).then(() => {
     setTimeout(updateWebsiteStatus, 5000);
