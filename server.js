@@ -52,7 +52,7 @@ function startSelfPing() {
     }, 120000); 
 }
 
-// --- ENDPOINT: LOGOWANIE WEJŚĆ ---
+// --- ENDPOINT: LOGOWANIE WEJŚĆ (EXISTING) ---
 app.post('/log-access', async (req, res) => {
     try {
         const { name, surname, page } = req.body;
@@ -74,7 +74,34 @@ app.post('/log-access', async (req, res) => {
         await channel.send({ embeds: [embed] });
         res.status(200).json({ status: 'success' });
     } catch (error) {
-        console.error('Błąd logowania:', error);
+        console.error('Błąd logowania wejścia:', error);
+        res.status(500).json({ error: "Błąd serwera" });
+    }
+});
+
+// --- NOWY ENDPOINT: LOGOWANIE PRÓB AUTORYZACJI ---
+app.post('/log-auth', async (req, res) => {
+    try {
+        const { login, success, passwordUsed } = req.body;
+        const channel = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
+        
+        if (!channel) return res.status(404).json({ error: "Kanał nie istnieje" });
+
+        const embed = new EmbedBuilder()
+            .setColor(success ? 0x2ecc71 : 0xe74c3c)
+            .setTitle(success ? '✅ Udane logowanie' : '❌ Nieudana próba logowania')
+            .addFields(
+                { name: '📂 Folder/Użytkownik', value: `\`${login}\``, inline: true },
+                { name: '🔑 Hasło', value: success ? `*Ukryte*` : `\`${passwordUsed}\``, inline: true },
+                { name: '⏰ Czas', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+            )
+            .setTimestamp()
+            .setFooter({ text: 'Monitor Bezpieczeństwa' });
+
+        await channel.send({ embeds: [embed] });
+        res.status(200).json({ status: 'success' });
+    } catch (error) {
+        console.error('Błąd logowania autoryzacji:', error);
         res.status(500).json({ error: "Błąd serwera" });
     }
 });
@@ -87,7 +114,6 @@ client.on('interactionCreate', async interaction => {
         const amount = interaction.options.getInteger('amount');
         
         try {
-            // Sprawdzamy, czy już nie odpowiedziano na interakcję
             if (interaction.deferred || interaction.replied) return;
 
             await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
@@ -151,7 +177,7 @@ async function updateWebsiteStatus() {
 }
 
 // --- START ---
-client.once('clientReady', async () => {
+client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
         await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
