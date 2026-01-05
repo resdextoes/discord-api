@@ -39,7 +39,11 @@ const commands = [
             option.setName('amount')
                 .setDescription('Liczba (1-100)')
                 .setRequired(true))
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+
+    new SlashCommandBuilder()
+        .setName('los')
+        .setDescription('Generuje losowy login i hasło')
 ].map(command => command.toJSON());
 
 // --- POMOCNICZA FUNKCJA: GENEROWANIE ZNAKÓW ---
@@ -181,6 +185,25 @@ client.on('interactionCreate', async interaction => {
             console.error('Błąd clear:', error);
             await interaction.editReply({ content: 'Wystąpił błąd podczas usuwania wiadomości.' });
         }
+    }
+    if (interaction.commandName === 'los') {
+        if (interaction.channelId !== LOSOWANIE_CHANNEL_ID) {
+            return interaction.reply({ content: 'Tej komendy można używać tylko na wyznaczonym kanale!', flags: [MessageFlags.Ephemeral] });
+        }
+
+        const randomLogin = generateRandomString(4);
+        const randomPassword = generateRandomString(6);
+
+        const embed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('🎲 Wygenerowano nowe dane')
+            .addFields(
+                { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
+                { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
+            )
+            .setTimestamp();
+
+        await interaction.reply({ embeds: [embed] });
     }
 });
 
