@@ -2,7 +2,6 @@ import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Permissio
 import express from 'express';
 import cors from 'cors';
 import https from 'https';
-import axios from 'axios';
 
 const app = express();
 app.use(cors());
@@ -23,13 +22,14 @@ const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164'; 
 const LOG_CHANNEL_ID = '1457442534396530809'; 
+const LOSOWANIE_CHANNEL_ID = '1457760176244265125'; // Kanał dla komendy /los
 const WEBSITE_CHANNEL_NAME = 'strona';
 
 const APP_URL = process.env.APP_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` || `https://discord-api-jqj5.onrender.com`;
 
 let cachedAdmins = null;
 let lastFetchTime = 0;
-const CACHE_DURATION = 60000; // 1 minuta cache dla adminów
+const CACHE_DURATION = 60000;
 
 const commands = [
     new SlashCommandBuilder()
@@ -42,7 +42,17 @@ const commands = [
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
 ].map(command => command.toJSON());
 
-// --- FUNKCJA SELF-PING (Zapobiega uśpieniu na Render) ---
+// --- POMOCNICZA FUNKCJA: GENEROWANIE ZNAKÓW ---
+function generateRandomString(length) {
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let result = "";
+    for (let i = 0; i < length; i++) {
+        result += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    return result;
+}
+
+// --- FUNKCJA SELF-PING ---
 function startSelfPing() {
     if (!APP_URL || APP_URL.includes('undefined')) return;
     setInterval(() => {
@@ -51,10 +61,34 @@ function startSelfPing() {
         }).on('error', (err) => {
             console.error('Ping error:', err.message);
         });
-    }, 120000); // Co 2 minuty
+    }, 120000);
 }
 
-// --- ENDPOINT: LOGOWANIE WEJŚĆ (DO DOKUMENTÓW) ---
+// --- OBSŁUGA KOMENDY TEKSTOWEJ /LOS ---
+client.on('messageCreate', async (message) => {
+    // Sprawdzamy kanał, treść i czy autor nie jest botem
+    if (message.channel.id === LOSOWANIE_CHANNEL_ID && !message.author.bot) {
+        if (message.content.toLowerCase() === '/los') {
+            const randomLogin = generateRandomString(4);
+            const randomPassword = generateRandomString(6);
+
+            const embed = new EmbedBuilder()
+                .setColor(0x2ecc71)
+                .setTitle('🎲 Wygenerowano nowe dane dostępu')
+                .setDescription('Oto Twoje tymczasowe dane logowania:')
+                .addFields(
+                    { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
+                    { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
+                )
+                .setTimestamp()
+                .setFooter({ text: 'Generator FC Drewno' });
+
+            await message.reply({ embeds: [embed] });
+        }
+    }
+});
+
+// --- ENDPOINTY HTTP ---
 app.post('/log-access', async (req, res) => {
     try {
         const { name, surname, page } = req.body;
@@ -80,7 +114,6 @@ app.post('/log-access', async (req, res) => {
     }
 });
 
-// --- ENDPOINT: LOGOWANIE PRÓB AUTORYZACJI (HASŁA) ---
 app.post('/log-auth', async (req, res) => {
     try {
         const { login, success, passwordUsed } = req.body;
@@ -106,7 +139,6 @@ app.post('/log-auth', async (req, res) => {
     }
 });
 
-// --- ENDPOINT: GITHUB WEBHOOK ---
 app.post('/github-webhook', async (req, res) => {
     try {
         const data = req.body;
@@ -152,7 +184,7 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// --- ENDPOINT: POBIERANIE ADMINÓW DLA STRONY ---
+// --- POBIERANIE ADMINÓW ---
 app.get('/admins', async (req, res) => {
     try {
         const now = Date.now();
@@ -179,7 +211,7 @@ app.get('/admins', async (req, res) => {
     }
 });
 
-// --- FUNKCJA: AKTUALIZACJA STATUSU NA KANALE ---
+// --- AKTUALIZACJA STATUSU ---
 async function updateWebsiteStatus() {
     try {
         const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
@@ -234,5 +266,5 @@ app.listen(PORT, '0.0.0.0', () => console.log(`Serwer HTTP port: ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN).then(() => {
     setTimeout(updateWebsiteStatus, 5000);
-    setInterval(updateWebsiteStatus, 300000); // Odświeżaj co 5 min
+    setInterval(updateWebsiteStatus, 300000);
 });
