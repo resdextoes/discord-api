@@ -92,11 +92,13 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// --- ENDPOINTY HTTP ---
+// --- ENDPOINT: LOGOWANIE WEJŚĆ (Z IP) ---
 app.post('/log-access', async (req, res) => {
     try {
-        const { name, surname, page } = req.body;
+        // Dodajemy 'ip' do pobieranych danych z body
+        const { name, surname, page, ip } = req.body; 
         const channel = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
+        
         if (!channel) return res.status(404).json({ error: "Kanał nie istnieje" });
 
         const embed = new EmbedBuilder()
@@ -105,6 +107,7 @@ app.post('/log-access', async (req, res) => {
             .addFields(
                 { name: '👤 Osoba', value: `**${name} ${surname}**`, inline: true },
                 { name: '📄 Widok', value: `\`${page}\``, inline: true },
+                { name: '🌐 Adres IP', value: `\`${ip || 'Nie wykryto'}\``, inline: false },
                 { name: '⏰ Czas', value: `<t:${Math.floor(Date.now() / 1000)}:T> (<t:${Math.floor(Date.now() / 1000)}:R>)`, inline: false }
             )
             .setTimestamp()
@@ -117,7 +120,6 @@ app.post('/log-access', async (req, res) => {
         res.status(500).json({ error: "Błąd serwera" });
     }
 });
-
 app.post('/log-auth', async (req, res) => {
     try {
         const { login, success, passwordUsed } = req.body;
