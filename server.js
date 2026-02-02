@@ -14,7 +14,13 @@ const client = new Client({
         GatewayIntentBits.GuildPresences,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
-    ]
+    ],
+    // Limity pamięci cache - kluczowe, by Render nie ubijał bota
+    makeCache: (manager) => {
+        if (manager.name === 'MessageManager') return 10; // Trzymaj tylko 10 ostatnich wiadomości
+        if (manager.name === 'UserManager' || manager.name === 'GuildMemberManager') return 50; 
+        return 0; // Reszta (np. reakcje) nie zajmuje RAMu
+    }
 });
 
 // --- KONFIGURACJA ID ---
@@ -59,13 +65,19 @@ function generateRandomString(length) {
 // --- FUNKCJA SELF-PING ---
 function startSelfPing() {
     if (!APP_URL || APP_URL.includes('undefined')) return;
+    
+    // Zmieniamy na 13 minut (780 000 ms)
     setInterval(() => {
         https.get(APP_URL, (res) => {
-            console.log(`Self-ping OK: Status ${res.statusCode}`);
+            if (res.statusCode === 429) {
+                console.warn('Self-ping: Otrzymano błąd 429 (Zwolnij!).');
+            } else {
+                console.log(`Self-ping (chyba okej): Status ${res.statusCode}`);
+            }
         }).on('error', (err) => {
             console.error('Ping error:', err.message);
         });
-    }, 120000);
+    }, 780000); // 13 minut
 }
 
 // --- OBSŁUGA KOMENDY TEKSTOWEJ /LOS ---
@@ -216,8 +228,12 @@ app.get('/admins', async (req, res) => {
         if (cachedAdmins && (now - lastFetchTime < CACHE_DURATION)) return res.json(cachedAdmins);
 
         const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
-        const members = await guild.members.fetch();
-        const admins = members.filter(m => m.roles.cache.has(ROLE_ID)).map(m => {
+        
+        // Pobieramy TYLKO członków z daną rolą, a nie cały serwer
+        const role = await guild.roles.fetch(ROLE_ID);
+        if (!role) return res.status(404).json({ error: "Rola nie istnieje" });
+
+        const admins = role.members.map(m => {
             const activity = m.presence?.activities.find(act => act.type === 0);
             return {
                 id: m.id,
@@ -232,7 +248,8 @@ app.get('/admins', async (req, res) => {
         lastFetchTime = now;
         res.json(admins);
     } catch (error) {
-        res.status(500).json({ error: "Błąd pobierania adminów" });
+        console.error('Błąd /admins:', error);
+        res.status(500).json({ error: "Błąd serwera" });
     }
 });
 
@@ -272,7 +289,7 @@ app.post('/website-update', async (req, res) => {
     res.status(200).json({ message: "OK" });
 });
 
-app.get('/', (req, res) => res.status(200).send('Bot is alive!'));
+app.get('/', (req, res) => res.status(200).send('Żyje! chyba XDDDd'));
 
 // --- INICJALIZACJA ---
 client.once('ready', async () => {
@@ -290,6 +307,6 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Serwer HTTP port: ${PORT}`));
 
 client.login(process.env.DISCORD_TOKEN).then(() => {
-    setTimeout(updateWebsiteStatus, 5000);
-    setInterval(updateWebsiteStatus, 300000);
+    setTimeout(updateWebsiteStatus, 10000); // 10 sek po starcie
+    setInterval(updateWebsiteStatus, 600000); // Co 10 minut (zamiast 5)
 });
