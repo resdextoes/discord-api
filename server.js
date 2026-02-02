@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, MessageFlags, Options } from 'discord.js';
 import express from 'express';
 import cors from 'cors';
 import https from 'https';
@@ -15,19 +15,16 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
     ],
-    makeCache: (manager) => {
-        // Tych managerów NIE WOLNO ustawiać na 0, bo bot się skraszuje:
-        if (manager.name === 'UserManager') return 100; 
-        if (manager.name === 'GuildMemberManager') return 100;
-
-        // Tutaj oszczędzamy RAM:
-        if (manager.name === 'MessageManager') return 10; // Trzymaj tylko 10 ostatnich wiadomości
-        if (manager.name === 'ThreadManager') return 0;
-        if (manager.name === 'ReactionManager') return 0;
-
-        // Reszta zostaje domyślna (bezpieczna)
-        return Infinity; 
-    }
+    // Poniższy blok naprawia błąd "set is not a function" oraz "UnsupportedCacheOverwriteWarning"
+    makeCache: Options.cacheWithLimits({
+        ...Options.DefaultMakeCacheSettings, // Zachowuje domyślne ustawienia dla kluczowych funkcji
+        MessageManager: 10,                 // Ogranicza pamięć dla wiadomości
+        PresenceManager: 50,                // Ogranicza pamięć dla statusów
+        ThreadManager: 0,                   // Wyłącza wątki (oszczędność RAM)
+        ReactionManager: 0,                 // Wyłącza reakcje (oszczędność RAM)
+        GuildMemberManager: 100,            // Limit osób w pamięci
+        UserManager: 100                    // Limit użytkowników w pamięci
+    })
 });
 
 // --- KONFIGURACJA ID ---
