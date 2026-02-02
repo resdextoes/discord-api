@@ -15,11 +15,18 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
     ],
-    // Limity pamięci cache - kluczowe, by Render nie ubijał bota
     makeCache: (manager) => {
+        // Tych managerów NIE WOLNO ustawiać na 0, bo bot się skraszuje:
+        if (manager.name === 'UserManager') return 100; 
+        if (manager.name === 'GuildMemberManager') return 100;
+
+        // Tutaj oszczędzamy RAM:
         if (manager.name === 'MessageManager') return 10; // Trzymaj tylko 10 ostatnich wiadomości
-        if (manager.name === 'UserManager' || manager.name === 'GuildMemberManager') return 50; 
-        return 0; // Reszta (np. reakcje) nie zajmuje RAMu
+        if (manager.name === 'ThreadManager') return 0;
+        if (manager.name === 'ReactionManager') return 0;
+
+        // Reszta zostaje domyślna (bezpieczna)
+        return Infinity; 
     }
 });
 
