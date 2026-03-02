@@ -28,6 +28,11 @@ const client = new Client({
     })
 });
 
+// --- KONFIGURACJA SUPABASE ---
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 // --- KONFIGURACJA ID ---
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
@@ -273,38 +278,40 @@ client.login(process.env.DISCORD_TOKEN).then(() => {
     setInterval(updateWebsiteStatus, 600000); // Co 10 minut (zamiast 5)
 });
 
-// --- KONFIGURACJA SUPABASE ---
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// --- OBSŁUGA KOMENDY TEKSTOWEJ /LOS ---
+client.on('messageCreate', async (message) => {
+    // Sprawdzamy kanał, treść i czy autor nie jest botem
+    if (message.channel.id === LOSOWANIE_CHANNEL_ID && !message.author.bot) {
+        if (message.content.toLowerCase() === '/los') {
+            const randomLogin = generateRandomString(4);
+            const randomPassword = generateRandomString(6);
 
-// Obsługa komendy /los
-if (message.content.toLowerCase() === '/los') {
-    const randomLogin = generateRandomString(4);
-    const randomPassword = generateRandomString(6);
+            // --- TUTAJ WKLEJASZ LOGIKĘ ZAPISU DO SUPABASE ---
+            const { error } = await supabase
+                .from('users')
+                .insert([{ login: randomLogin, password: randomPassword }]);
 
-    // ZAPISUJEMY TYLKO LOGIN I HASŁO
-    const { error } = await supabase
-        .from('users')
-        .insert([{ login: randomLogin, password: randomPassword }]);
+            if (error) {
+                console.error('Błąd zapisu:', error);
+                return message.reply("❌ Błąd: Nie udało się zarezerwować loginu.");
+            }
+            // --- KONIEC LOGIKI SUPABASE ---
 
-    if (error) {
-        console.error('Błąd zapisu:', error);
-        return message.reply("❌ Błąd: Nie udało się zarezerwować loginu.");
+            const embed = new EmbedBuilder()
+                .setColor(0x2ecc71)
+                .setTitle('🎲 Wygenerowano nowe dane') // Zmień tytuł na ten nowy
+                .setDescription('Dane zostały zapisane w bazie danych Supabase.')
+                .addFields(
+                    { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
+                    { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
+                )
+                .setTimestamp()
+                .setFooter({ text: 'Generator FC Drewno' });
+
+            await message.reply({ embeds: [embed] });
+        }
     }
-
-    const embed = new EmbedBuilder()
-        .setColor(0x2ecc71)
-        .setTitle('🎲 Wygenerowano nowe dane')
-        .setDescription('Dane zostały zapisane w bazie danych Supabase. Są gotowe do uzupełnienia.')
-        .addFields(
-            { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
-            { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
-        )
-        .setTimestamp();
-
-    await message.reply({ embeds: [embed] });
-}
+});
 
 // NOWY ENDPOINT: OBSŁUGA LOGOWANIA ZE STRONY WWW
 app.post('/api/login', async (req, res) => {
