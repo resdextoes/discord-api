@@ -8,6 +8,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// --- KONFIGURACJA SUPABASE ---
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -16,29 +21,23 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
     ],
-    // Poniższy blok naprawia błąd "set is not a function" oraz "UnsupportedCacheOverwriteWarning"
     makeCache: Options.cacheWithLimits({
-        ...Options.DefaultMakeCacheSettings, // Zachowuje domyślne ustawienia dla kluczowych funkcji
-        MessageManager: 10,                 // Ogranicza pamięć dla wiadomości
-        PresenceManager: 50,                // Ogranicza pamięć dla statusów
-        ThreadManager: 0,                   // Wyłącza wątki (oszczędność RAM)
-        ReactionManager: 0,                 // Wyłącza reakcje (oszczędność RAM)
-        GuildMemberManager: 100,            // Limit osób w pamięci
-        UserManager: 100                    // Limit użytkowników w pamięci
+        ...Options.DefaultMakeCacheSettings,
+        MessageManager: 10,
+        PresenceManager: 50,
+        ThreadManager: 0,
+        ReactionManager: 0,
+        GuildMemberManager: 100,
+        UserManager: 100
     })
 });
-
-// --- KONFIGURACJA SUPABASE ---
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- KONFIGURACJA ID ---
 const GUILD_ID = '1439591884287639694';
 const ROLE_ID = '1439593337488150568';
 const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164'; 
 const LOG_CHANNEL_ID = '1457442534396530809'; 
-const LOSOWANIE_CHANNEL_ID = '1457760176244265125'; // Kanał dla komendy /los
+const LOSOWANIE_CHANNEL_ID = '1457760176244265125';
 const WEBSITE_CHANNEL_NAME = 'strona';
 
 const APP_URL = process.env.APP_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` || `https://discord-api-jqj5.onrender.com`;
@@ -62,7 +61,6 @@ const commands = [
         .setDescription('Generuje losowy login i hasło')
 ].map(command => command.toJSON());
 
-// --- POMOCNICZA FUNKCJA: GENEROWANIE ZNAKÓW ---
 function generateRandomString(length) {
     const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let result = "";
@@ -72,107 +70,10 @@ function generateRandomString(length) {
     return result;
 }
 
-// --- FUNKCJA SELF-PING ---
-function startSelfPing() {
-    if (!APP_URL || APP_URL.includes('undefined')) return;
-    
-    // Zmieniamy na 13 minut (780 000 ms)
-    setInterval(() => {
-        https.get(APP_URL, (res) => {
-            if (res.statusCode === 429) {
-                console.warn('Self-ping: Otrzymano błąd 429 (Zwolnij!).');
-            } else {
-                console.log(`Self-ping (chyba okej): Status ${res.statusCode}`);
-            }
-        }).on('error', (err) => {
-            console.error('Ping error:', err.message);
-        });
-    }, 780000); // 13 minut
-}
-
-// --- ENDPOINT: LOGOWANIE WEJŚĆ (Z IP) ---
-app.post('/log-access', async (req, res) => {
-    try {
-        // Dodajemy 'ip' do pobieranych danych z body
-        const { name, surname, page, ip } = req.body; 
-        const channel = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
-        
-        if (!channel) return res.status(404).json({ error: "Kanał nie istnieje" });
-
-        const embed = new EmbedBuilder()
-            .setColor(0x3498db)
-            .setTitle('🔓 Uzyskano dostęp do mObywatela')
-            .addFields(
-                { name: '👤 Osoba', value: `**${name} ${surname}**`, inline: true },
-                { name: '📄 Widok', value: `\`${page}\``, inline: true },
-                { name: '🌐 Adres IP', value: `\`${ip || 'Nie wykryto'}\``, inline: false },
-                { name: '⏰ Czas', value: `<t:${Math.floor(Date.now() / 1000)}:T> (<t:${Math.floor(Date.now() / 1000)}:R>)`, inline: false }
-            )
-            .setTimestamp()
-            .setFooter({ text: 'System Logowania Dostępu' });
-
-        await channel.send({ embeds: [embed] });
-        res.status(200).json({ status: 'success' });
-    } catch (error) {
-        console.error('Błąd logowania wejścia:', error);
-        res.status(500).json({ error: "Błąd serwera" });
-    }
-});
-app.post('/log-auth', async (req, res) => {
-    try {
-        const { login, success, passwordUsed } = req.body;
-        const channel = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
-        if (!channel) return res.status(404).json({ error: "Kanał nie istnieje" });
-
-        const embed = new EmbedBuilder()
-            .setColor(success ? 0x2ecc71 : 0xe74c3c)
-            .setTitle(success ? '✅ Udane logowanie' : '❌ Nieudana próba logowania')
-            .addFields(
-                { name: '📂 Folder/Użytkownik', value: `\`${login}\``, inline: true },
-                { name: '🔑 Hasło', value: success ? `*Ukryte*` : `\`${passwordUsed}\``, inline: true },
-                { name: '⏰ Czas', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
-            )
-            .setTimestamp()
-            .setFooter({ text: 'Monitor Bezpieczeństwa' });
-
-        await channel.send({ embeds: [embed] });
-        res.status(200).json({ status: 'success' });
-    } catch (error) {
-        console.error('Błąd logowania autoryzacji:', error);
-        res.status(500).json({ error: "Błąd serwera" });
-    }
-});
-
-app.post('/github-webhook', async (req, res) => {
-    try {
-        const data = req.body;
-        if (!data.commits) return res.status(200).send('OK');
-        const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID).catch(() => null);
-        if (!channel) return res.status(404).send('Error');
-
-        for (const commit of data.commits) {
-            const embed = new EmbedBuilder()
-                .setColor(0x0099ff)
-                .setAuthor({ name: commit.author.name || 'GitHub', iconURL: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png' })
-                .setTitle(`🛠️ Nowy commit: ${data.repository.name}`)
-                .setURL(commit.url)
-                .setDescription(`**Wiadomość:**\n${commit.message}`)
-                .addFields(
-                    { name: 'Gałąź', value: `\`${data.ref.split('/').pop()}\``, inline: true }, 
-                    { name: 'Repozytorium', value: `[Link](${data.repository.html_url})`, inline: true }
-                )
-                .setTimestamp();
-            await channel.send({ embeds: [embed] });
-        }
-        res.status(200).send('OK');
-    } catch (error) {
-        res.status(500).send('Error');
-    }
-});
-
-// --- KOMENDA SLASH: CLEAR ---
+// --- OBSŁUGA INTERAKCJI (SLASH COMMANDS) ---
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
+
     if (interaction.commandName === 'clear') {
         const amount = interaction.options.getInteger('amount');
         if (amount < 1 || amount > 100) return interaction.reply({ content: 'Podaj liczbę 1-100', flags: [MessageFlags.Ephemeral] });
@@ -186,139 +87,95 @@ client.on('interactionCreate', async interaction => {
             await interaction.editReply({ content: 'Wystąpił błąd podczas usuwania wiadomości.' });
         }
     }
-});
 
-// --- POBIERANIE ADMINÓW ---
-app.get('/admins', async (req, res) => {
-    try {
-        const now = Date.now();
-        if (cachedAdmins && (now - lastFetchTime < CACHE_DURATION)) return res.json(cachedAdmins);
-
-        const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
-        
-        // Pobieramy TYLKO członków z daną rolą, a nie cały serwer
-        const role = await guild.roles.fetch(ROLE_ID);
-        if (!role) return res.status(404).json({ error: "Rola nie istnieje" });
-
-        const admins = role.members.map(m => {
-            const activity = m.presence?.activities.find(act => act.type === 0);
-            return {
-                id: m.id,
-                username: m.user.username,
-                avatar: m.user.displayAvatarURL({ extension: 'png', size: 128 }),
-                status: m.presence ? m.presence.status : 'offline',
-                game: activity ? activity.name : null
-            };
-        });
-
-        cachedAdmins = admins;
-        lastFetchTime = now;
-        res.json(admins);
-    } catch (error) {
-        console.error('Błąd /admins:', error);
-        res.status(500).json({ error: "Błąd serwera" });
-    }
-});
-
-// --- AKTUALIZACJA STATUSU ---
-async function updateWebsiteStatus() {
-    try {
-        const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID);
-        const channel = guild.channels.cache.find(ch => ch.name === WEBSITE_CHANNEL_NAME);
-        if (!channel) return;
-
-        const embed = new EmbedBuilder()
-            .setColor(0x2ecc71)
-            .setTitle('🌐 Oficjalna Strona FC Drewno')
-            .setURL('https://resdextoes.github.io/FC_Drewno/')
-            .setAuthor({ name: 'FC Drewno', iconURL: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png' })
-            .setDescription('Strona jest stale aktualizowana.')
-            .addFields(
-                { name: 'Adres strony', value: '[resdextoes.github.io/FC_Drewno](https://resdextoes.github.io/FC_Drewno/)' },
-                { name: 'Ostatnia auto-aktualizacja', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
-                { name: 'Status bota', value: '🟢 Aktywny', inline: true }
-            )
-            .setTimestamp()
-            .setFooter({ text: 'System automatycznego odświeżania' });
-
-        const messages = await channel.messages.fetch({ limit: 10 });
-        const lastBotMessage = messages.find(m => m.author.id === client.user.id);
-
-        if (lastBotMessage) await lastBotMessage.edit({ embeds: [embed] });
-        else await channel.send({ embeds: [embed] });
-    } catch (error) {
-        console.error('Status Update Error:', error.message);
-    }
-}
-
-app.post('/website-update', async (req, res) => {
-    await updateWebsiteStatus();
-    res.status(200).json({ message: "OK" });
-});
-
-app.get('/', (req, res) => res.status(200).send('Żyje! chyba XDDDd'));
-
-// --- INICJALIZACJA ---
-client.once('ready', async () => {
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    try {
-        await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-        console.log(`Bot online: ${client.user.tag}`);
-        startSelfPing();
-    } catch (error) {
-        console.error('Rejestracja komend error:', error);
-    }
-});
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Serwer HTTP port: ${PORT}`));
-
-client.login(process.env.DISCORD_TOKEN).then(() => {
-    setTimeout(updateWebsiteStatus, 10000); // 10 sek po starcie
-    setInterval(updateWebsiteStatus, 600000); // Co 10 minut (zamiast 5)
-});
-
-// --- OBSŁUGA KOMENDY TEKSTOWEJ /LOS ---
-client.on('messageCreate', async (message) => {
-    // Sprawdzamy kanał, treść i czy autor nie jest botem
-    if (message.channel.id === LOSOWANIE_CHANNEL_ID && !message.author.bot) {
-        if (message.content.toLowerCase() === '/los') {
+    if (interaction.commandName === 'los') {
+        try {
             const randomLogin = generateRandomString(4);
             const randomPassword = generateRandomString(6);
 
-            // --- TUTAJ WKLEJASZ LOGIKĘ ZAPISU DO SUPABASE ---
             const { error } = await supabase
                 .from('users')
                 .insert([{ login: randomLogin, password: randomPassword }]);
 
             if (error) {
-                console.error('Błąd zapisu:', error);
-                return message.reply("❌ Błąd: Nie udało się zarezerwować loginu.");
+                console.error('Błąd Supabase:', error);
+                return interaction.reply({ content: "❌ Błąd: Nie udało się zarezerwować loginu w bazie.", flags: [MessageFlags.Ephemeral] });
             }
-            // --- KONIEC LOGIKI SUPABASE ---
 
             const embed = new EmbedBuilder()
                 .setColor(0x2ecc71)
-                .setTitle('🎲 Wygenerowano nowe dane') // Zmień tytuł na ten nowy
-                .setDescription('Dane zostały zapisane w bazie danych Supabase.')
+                .setTitle('🎲 Wygenerowano nowe dane')
                 .addFields(
                     { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
                     { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
                 )
-                .setTimestamp()
-                .setFooter({ text: 'Generator FC Drewno' });
+                .setTimestamp();
 
-            await message.reply({ embeds: [embed] });
+            await interaction.reply({ embeds: [embed] });
+        } catch (err) {
+            console.error('Błąd /los slash:', err);
+            await interaction.reply({ content: "Błąd podczas generowania danych.", flags: [MessageFlags.Ephemeral] });
         }
     }
 });
 
-// NOWY ENDPOINT: OBSŁUGA LOGOWANIA ZE STRONY WWW
+// --- OBSŁUGA WIADOMOŚCI TEKSTOWYCH ---
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+
+    if (message.content.toLowerCase() === '/los' && message.channel.id === LOSOWANIE_CHANNEL_ID) {
+        const randomLogin = generateRandomString(4);
+        const randomPassword = generateRandomString(6);
+
+        const { error } = await supabase
+            .from('users')
+            .insert([{ login: randomLogin, password: randomPassword }]);
+
+        if (error) {
+            console.error('Błąd zapisu tekstowego:', error);
+            return message.reply("❌ Błąd bazy danych.");
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('🎲 Wygenerowano dane (Tekst)')
+            .addFields(
+                { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
+                { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
+            )
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+    }
+});
+
+// --- ENDPOINTY EXPRESS ---
+app.post('/log-access', async (req, res) => {
+    try {
+        const { name, surname, page, ip } = req.body; 
+        const channel = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
+        if (!channel) return res.status(404).json({ error: "Kanał nie istnieje" });
+
+        const embed = new EmbedBuilder()
+            .setColor(0x3498db)
+            .setTitle('🔓 Uzyskano dostęp')
+            .addFields(
+                { name: '👤 Osoba', value: `**${name} ${surname}**`, inline: true },
+                { name: '📄 Widok', value: `\`${page}\``, inline: true },
+                { name: '🌐 Adres IP', value: `\`${ip || 'Nie wykryto'}\``, inline: false }
+            )
+            .setTimestamp();
+
+        await channel.send({ embeds: [embed] });
+        res.status(200).json({ status: 'success' });
+    } catch (error) {
+        res.status(500).json({ error: "Błąd serwera" });
+    }
+});
+
 app.post('/api/login', async (req, res) => {
     try {
         const { login, password } = req.body;
-
-        // Sprawdzanie czy login i hasło pasują w Supabase
         const { data, error } = await supabase
             .from('users')
             .select('*')
@@ -326,24 +183,32 @@ app.post('/api/login', async (req, res) => {
             .eq('password', password)
             .single();
 
-        if (error || !data) {
-            // Logujemy nieudaną próbę do konsoli (opcjonalnie)
-            console.log(`Nieudane logowanie: ${login}`);
-            return res.status(401).json({ 
-                success: false, 
-                message: "Nieprawidłowy login lub hasło." 
-            });
-        }
-
-        // Jeśli dane są poprawne, wysyłamy wszystkie pola z bazy do strony
-        console.log(`Zalogowano pomyślnie: ${login}`);
-        res.status(200).json({ 
-            success: true, 
-            user: data 
-        });
-
+        if (error || !data) return res.status(401).json({ success: false, message: "Błąd logowania." });
+        res.status(200).json({ success: true, user: data });
     } catch (err) {
-        console.error('Błąd serwera podczas logowania:', err);
-        res.status(500).json({ error: "Błąd wewnętrzny serwera" });
+        res.status(500).json({ error: "Błąd wewnętrzny" });
     }
+});
+
+app.get('/', (req, res) => res.status(200).send('Bot i Serwer żyją!'));
+
+// --- START ---
+client.once('ready', async () => {
+    console.log(`✅ Zalogowano jako: ${client.user.tag}`);
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    try {
+        await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
+        console.log('🚀 Komendy Slash zarejestrowane.');
+    } catch (error) {
+        console.error('Błąd rejestracji komend:', error);
+    }
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`📡 Serwer HTTP na porcie: ${PORT}`);
+});
+
+client.login(process.env.DISCORD_TOKEN).catch(err => {
+    console.error('❌ BŁĄD LOGOWANIA DO DISCORDA:', err);
 });
