@@ -339,7 +339,7 @@ app.post('/api/login', async (req, res) => {
         console.log(`Zalogowano pomyślnie: ${login}`);
         res.status(200).json({ 
             success: true, 
-            user: data 
+            userData: data 
         });
 
     } catch (err) {
