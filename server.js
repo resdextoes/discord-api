@@ -85,30 +85,6 @@ function startSelfPing() {
     }, 780000); // 13 minut
 }
 
-// --- OBSŁUGA KOMENDY TEKSTOWEJ /LOS ---
-client.on('messageCreate', async (message) => {
-    // Sprawdzamy kanał, treść i czy autor nie jest botem
-    if (message.channel.id === LOSOWANIE_CHANNEL_ID && !message.author.bot) {
-        if (message.content.toLowerCase() === '/los') {
-            const randomLogin = generateRandomString(4);
-            const randomPassword = generateRandomString(6);
-
-            const embed = new EmbedBuilder()
-                .setColor(0x2ecc71)
-                .setTitle('🎲 Wygenerowano nowe dane dostępu')
-                .setDescription('Oto Twoje tymczasowe dane logowania:')
-                .addFields(
-                    { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
-                    { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
-                )
-                .setTimestamp()
-                .setFooter({ text: 'Generator FC Drewno' });
-
-            await message.reply({ embeds: [embed] });
-        }
-    }
-});
-
 // --- ENDPOINT: LOGOWANIE WEJŚĆ (Z IP) ---
 app.post('/log-access', async (req, res) => {
     try {
@@ -330,21 +306,37 @@ if (message.content.toLowerCase() === '/los') {
     await message.reply({ embeds: [embed] });
 }
 
-// --- NOWY ENDPOINT: LOGOWANIE DLA STRONY WWW ---
+// NOWY ENDPOINT: OBSŁUGA LOGOWANIA ZE STRONY WWW
 app.post('/api/login', async (req, res) => {
-    const { login, password } = req.body;
+    try {
+        const { login, password } = req.body;
 
-    const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('login', login)
-        .eq('password', password)
-        .single();
+        // Sprawdzanie czy login i hasło pasują w Supabase
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('login', login)
+            .eq('password', password)
+            .single();
 
-    if (error || !data) {
-        return res.status(401).json({ success: false, message: "Błędny login lub hasło" });
+        if (error || !data) {
+            // Logujemy nieudaną próbę do konsoli (opcjonalnie)
+            console.log(`Nieudane logowanie: ${login}`);
+            return res.status(401).json({ 
+                success: false, 
+                message: "Nieprawidłowy login lub hasło." 
+            });
+        }
+
+        // Jeśli dane są poprawne, wysyłamy wszystkie pola z bazy do strony
+        console.log(`Zalogowano pomyślnie: ${login}`);
+        res.status(200).json({ 
+            success: true, 
+            user: data 
+        });
+
+    } catch (err) {
+        console.error('Błąd serwera podczas logowania:', err);
+        res.status(500).json({ error: "Błąd wewnętrzny serwera" });
     }
-
-    // Zwracamy wszystkie dane z bazy (imię, nazwisko, pesel itd.)
-    res.json({ success: true, user: data });
 });
