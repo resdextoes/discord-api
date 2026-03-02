@@ -92,4 +92,9 @@ client.once('ready', async () => {
 app.get('/', (req, res) => res.send('Serwer działa.'));
 app.listen(process.env.PORT || 10000, '0.0.0.0');
 
-client.login(process.env.DISCORD_TOKEN).catch(err => console.error("Błąd logowania:", err));
+client.login(process.env.DISCORD_TOKEN).then(() => {
+    console.log("LOGIN SUCCESS!");
+}).catch(err => {
+    console.error("!!! BŁĄD LOGOWANIA !!!");
+    console.error(err); // To nam wypisze konkretny błąd w logach Rendera
+});
