@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Permissio
 import express from 'express';
 import cors from 'cors';
 import https from 'https';
+import { createClient } from '@supabase/supabase-js';
 
 const app = express();
 app.use(cors());
@@ -204,25 +205,6 @@ client.on('interactionCreate', async interaction => {
             await interaction.editReply({ content: 'Wystąpił błąd podczas usuwania wiadomości.' });
         }
     }
-    if (interaction.commandName === 'los') {
-        if (interaction.channelId !== LOSOWANIE_CHANNEL_ID) {
-            return interaction.reply({ content: 'Tej komendy można używać tylko na wyznaczonym kanale!', flags: [MessageFlags.Ephemeral] });
-        }
-
-        const randomLogin = generateRandomString(4);
-        const randomPassword = generateRandomString(6);
-
-        const embed = new EmbedBuilder()
-            .setColor(0x2ecc71)
-            .setTitle('🎲 Wygenerowano nowe dane')
-            .addFields(
-                { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
-                { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
-            )
-            .setTimestamp();
-
-        await interaction.reply({ embeds: [embed] });
-    }
 });
 
 // --- POBIERANIE ADMINÓW ---
@@ -313,4 +295,56 @@ app.listen(PORT, '0.0.0.0', () => console.log(`Serwer HTTP port: ${PORT}`));
 client.login(process.env.DISCORD_TOKEN).then(() => {
     setTimeout(updateWebsiteStatus, 10000); // 10 sek po starcie
     setInterval(updateWebsiteStatus, 600000); // Co 10 minut (zamiast 5)
+});
+
+// --- KONFIGURACJA SUPABASE ---
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Obsługa komendy /los
+if (message.content.toLowerCase() === '/los') {
+    const randomLogin = generateRandomString(4);
+    const randomPassword = generateRandomString(6);
+
+    // ZAPISUJEMY TYLKO LOGIN I HASŁO
+    const { error } = await supabase
+        .from('users')
+        .insert([{ login: randomLogin, password: randomPassword }]);
+
+    if (error) {
+        console.error('Błąd zapisu:', error);
+        return message.reply("❌ Błąd: Nie udało się zarezerwować loginu.");
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(0x2ecc71)
+        .setTitle('🎲 Wygenerowano nowe dane')
+        .setDescription('Dane zostały zapisane w bazie danych Supabase. Są gotowe do uzupełnienia.')
+        .addFields(
+            { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
+            { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
+        )
+        .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+}
+
+// --- NOWY ENDPOINT: LOGOWANIE DLA STRONY WWW ---
+app.post('/api/login', async (req, res) => {
+    const { login, password } = req.body;
+
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('login', login)
+        .eq('password', password)
+        .single();
+
+    if (error || !data) {
+        return res.status(401).json({ success: false, message: "Błędny login lub hasło" });
+    }
+
+    // Zwracamy wszystkie dane z bazy (imię, nazwisko, pesel itd.)
+    res.json({ success: true, user: data });
 });

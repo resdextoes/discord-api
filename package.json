@@ -4,6 +4,7 @@
   "main": "server.js",
   "type": "module",
   "dependencies": {
+    "@supabase/supabase-js": "^2.98.0",
     "axios": "^1.13.2",
     "cors": "^2.8.5",
     "discord.js": "^14.14.1",
