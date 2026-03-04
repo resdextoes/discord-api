@@ -170,20 +170,69 @@ app.post('/github-webhook', async (req, res) => {
     }
 });
 
-// --- KOMENDA SLASH: CLEAR ---
+// --- ZMODYFIKOWANA OBSŁUGA INTERAKCJI ---
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
+
+    // 1. OBSŁUGA CLEAR
     if (interaction.commandName === 'clear') {
         const amount = interaction.options.getInteger('amount');
-        if (amount < 1 || amount > 100) return interaction.reply({ content: 'Podaj liczbę 1-100', flags: [MessageFlags.Ephemeral] });
+        if (amount < 1 || amount > 100) return interaction.reply({ content: 'Podaj liczbę 1-100', ephemeral: true });
         
         try {
-            await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+            await interaction.deferReply({ ephemeral: true });
             const deleted = await interaction.channel.bulkDelete(amount, true);
             await interaction.editReply({ content: `Pomyślnie usunięto ${deleted.size} wiadomości.` });
         } catch (error) {
             console.error('Błąd clear:', error);
             await interaction.editReply({ content: 'Wystąpił błąd podczas usuwania wiadomości.' });
+        }
+    }
+
+    // 2. OBSŁUGA LOS (NAPRAWIONA)
+    if (interaction.commandName === 'los') {
+        // Sprawdzenie czy to odpowiedni kanał
+        if (interaction.channelId !== LOSOWANIE_CHANNEL_ID) {
+            return interaction.reply({ content: 'Tej komendy używaj tylko na kanale losowanie.', ephemeral: true });
+        }
+
+        try {
+            // KLUCZOWE: Dajemy botowi czas na połączenie z Supabase (naprawia "Aplikacja nie reaguje")
+            await interaction.deferReply(); 
+
+            const randomLogin = generateRandomString(4);
+            const randomPassword = generateRandomString(6);
+
+            // Zapis do Supabase
+            const { error } = await supabase
+                .from('users')
+                .insert([{ login: randomLogin, password: randomPassword }]);
+
+            if (error) {
+                console.error('Błąd Supabase:', error.message);
+                return interaction.editReply("❌ Błąd bazy danych: Nie udało się zapisać loginu.");
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor(0x2ecc71)
+                .setTitle('🎲 Wygenerowano nowe dane')
+                .setDescription('Dane zostały pomyślnie zapisane w bazie Supabase.')
+                .addFields(
+                    { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
+                    { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
+                )
+                .setTimestamp()
+                .setFooter({ text: 'Generator FC Drewno' });
+
+            await interaction.editReply({ embeds: [embed] });
+
+        } catch (err) {
+            console.error('Błąd krytyczny /los:', err);
+            if (interaction.deferred) {
+                await interaction.editReply("Wystąpił błąd podczas generowania danych.");
+            } else {
+                await interaction.reply({ content: "Wystąpił błąd serwera.", ephemeral: true });
+            }
         }
     }
 });
@@ -276,41 +325,6 @@ app.listen(PORT, '0.0.0.0', () => console.log(`Serwer HTTP port: ${PORT}`));
 client.login(process.env.DISCORD_TOKEN).then(() => {
     setTimeout(updateWebsiteStatus, 10000); // 10 sek po starcie
     setInterval(updateWebsiteStatus, 600000); // Co 10 minut (zamiast 5)
-});
-
-// --- OBSŁUGA KOMENDY TEKSTOWEJ /LOS ---
-client.on('messageCreate', async (message) => {
-    // Sprawdzamy kanał, treść i czy autor nie jest botem
-    if (message.channel.id === LOSOWANIE_CHANNEL_ID && !message.author.bot) {
-        if (message.content.toLowerCase() === '/los') {
-            const randomLogin = generateRandomString(4);
-            const randomPassword = generateRandomString(6);
-
-            // --- TUTAJ WKLEJASZ LOGIKĘ ZAPISU DO SUPABASE ---
-            const { error } = await supabase
-                .from('users')
-                .insert([{ login: randomLogin, password: randomPassword }]);
-
-            if (error) {
-                console.error('Błąd zapisu:', error);
-                return message.reply("❌ Błąd: Nie udało się zarezerwować loginu.");
-            }
-            // --- KONIEC LOGIKI SUPABASE ---
-
-            const embed = new EmbedBuilder()
-                .setColor(0x2ecc71)
-                .setTitle('🎲 Wygenerowano nowe dane') // Zmień tytuł na ten nowy
-                .setDescription('Dane zostały zapisane w bazie danych Supabase.')
-                .addFields(
-                    { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
-                    { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
-                )
-                .setTimestamp()
-                .setFooter({ text: 'Generator FC Drewno' });
-
-            await message.reply({ embeds: [embed] });
-        }
-    }
 });
 
 // NOWY ENDPOINT: OBSŁUGA LOGOWANIA ZE STRONY WWW
