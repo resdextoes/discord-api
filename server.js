@@ -375,18 +375,12 @@ client.login(process.env.DISCORD_TOKEN).then(() => {
     setInterval(updateWebsiteStatus, 600000); // Co 10 minut (zamiast 5)
 });
 
-// NOWY ENDPOINT: OBSŁUGA LOGOWANIA ZE STRONY WWW
+// --- POPRAWIONY ENDPOINT LOGOWANIA ---
 app.post('/api/login', async (req, res) => {
-
-    if (data) {
-    res.status(200).json({ success: true, userData: data });
-    updateInfoList();
-    }
-
     try {
         const { login, password } = req.body;
 
-        // Sprawdzanie czy login i hasło pasują w Supabase
+        // 1. Dopiero tutaj definiujemy 'data' pobierając je z Supabase
         const { data, error } = await supabase
             .from('users')
             .select('*')
@@ -394,8 +388,8 @@ app.post('/api/login', async (req, res) => {
             .eq('password', password)
             .single();
 
+        // 2. Sprawdzamy czy nie ma błędu i czy użytkownik istnieje
         if (error || !data) {
-            // Logujemy nieudaną próbę do konsoli (opcjonalnie)
             console.log(`Nieudane logowanie: ${login}`);
             return res.status(401).json({ 
                 success: false, 
@@ -403,9 +397,13 @@ app.post('/api/login', async (req, res) => {
             });
         }
 
-        // Jeśli dane są poprawne, wysyłamy wszystkie pola z bazy do strony
+        // 3. Jeśli wszystko ok, logujemy sukces i odświeżamy listę na Discordzie
         console.log(`Zalogowano pomyślnie: ${login}`);
-        res.status(200).json({ 
+        
+        // Odświeżamy listę na kanale info (bo np. ktoś mógł zmienić imię)
+        updateInfoList(); 
+
+        return res.status(200).json({ 
             success: true, 
             userData: data 
         });
