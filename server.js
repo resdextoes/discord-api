@@ -354,19 +354,18 @@ async function updateInfoList() {
     }
 }
 
-// --- INICJALIZACJA ---
-client.once('ready', async () => {
+// --- ZMIANA NAZWY ZDARZENIA ---
+client.once('clientReady', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
         await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
         console.log(`Bot online: ${client.user.tag}`);
         startSelfPing();
+        updateInfoList(); // Twoja funkcja aktualizująca listę na starcie
     } catch (error) {
         console.error('Rejestracja komend error:', error);
     }
-    updateInfoList();
 });
-
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Serwer HTTP port: ${PORT}`));
 
@@ -375,12 +374,11 @@ client.login(process.env.DISCORD_TOKEN).then(() => {
     setInterval(updateWebsiteStatus, 600000); // Co 10 minut (zamiast 5)
 });
 
-// --- POPRAWIONY ENDPOINT LOGOWANIA ---
 app.post('/api/login', async (req, res) => {
     try {
         const { login, password } = req.body;
 
-        // 1. Dopiero tutaj definiujemy 'data' pobierając je z Supabase
+        // Tutaj DEFINIUJEMY 'data' pobierając dane z bazy
         const { data, error } = await supabase
             .from('users')
             .select('*')
@@ -388,7 +386,7 @@ app.post('/api/login', async (req, res) => {
             .eq('password', password)
             .single();
 
-        // 2. Sprawdzamy czy nie ma błędu i czy użytkownik istnieje
+        // Sprawdzamy, czy login/hasło są złe lub czy wystąpił błąd bazy
         if (error || !data) {
             console.log(`Nieudane logowanie: ${login}`);
             return res.status(401).json({ 
@@ -397,10 +395,10 @@ app.post('/api/login', async (req, res) => {
             });
         }
 
-        // 3. Jeśli wszystko ok, logujemy sukces i odświeżamy listę na Discordzie
+        // Jeśli dane są poprawne, wysyłamy je do strony i odświeżamy listę na Discordzie
         console.log(`Zalogowano pomyślnie: ${login}`);
         
-        // Odświeżamy listę na kanale info (bo np. ktoś mógł zmienić imię)
+        // Wywołujemy aktualizację listy na kanale INFO
         updateInfoList(); 
 
         return res.status(200).json({ 
