@@ -190,55 +190,50 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // 2. OBSŁUGA LOS (NAPRAWIONA)
+// 2. OBSŁUGA LOS
     if (interaction.commandName === 'los') {
-        // Sprawdzenie czy to odpowiedni kanał
         if (interaction.channelId !== LOSOWANIE_CHANNEL_ID) {
             return interaction.reply({ content: 'Tej komendy używaj tylko na kanale losowanie.', ephemeral: true });
         }
 
         try {
-            // KLUCZOWE: Dajemy botowi czas na połączenie z Supabase (naprawia "Aplikacja nie reaguje")
             await interaction.deferReply(); 
 
             const randomLogin = generateRandomString(4);
             const randomPassword = generateRandomString(6);
 
-            // Zapis do Supabase
-            const { error } = await supabase
+            // Zapis do Supabase - tutaj tworzymy zmienną { error }
+            const { error: supabaseError } = await supabase
                 .from('users')
                 .insert([{ login: randomLogin, password: randomPassword }]);
 
-            if (error) {
-                console.error('Błąd Supabase:', error.message);
-                return interaction.editReply("❌ Błąd bazy danych: Nie udało się zapisać loginu.");
+            // Sprawdzamy błąd OD RAZU tutaj
+            if (supabaseError) {
+                console.error('Błąd Supabase:', supabaseError.message);
+                return interaction.editReply("❌ Błąd bazy danych: Nie udało się zarejestrować.");
             }
 
+            // Jeśli nie ma błędu, idziemy dalej
             const embed = new EmbedBuilder()
                 .setColor(0x2ecc71)
                 .setTitle('🎲 Wygenerowano nowe dane')
-                .setDescription('Dane zostały pomyślnie wygenerowane.')
                 .addFields(
                     { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
                     { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
                 )
-                .setTimestamp()
-                .setFooter({ text: 'Generator logowań' });
+                .setFooter({ text: 'Generator logowań' })
+                .setTimestamp();
 
             await interaction.editReply({ embeds: [embed] });
+            
+            // AKTUALIZACJA LISTY INFO - wywołujemy ją tutaj
+            await updateInfoList();
 
         } catch (err) {
             console.error('Błąd krytyczny /los:', err);
             if (interaction.deferred) {
                 await interaction.editReply("Wystąpił błąd podczas generowania danych.");
-            } else {
-                await interaction.reply({ content: "Wystąpił błąd serwera.", ephemeral: true });
             }
-        }
-
-        if (!error) {
-    await interaction.editReply({ embeds: [embed] });
-    await updateInfoList();
         }
     }
 });
