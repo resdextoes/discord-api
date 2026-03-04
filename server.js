@@ -40,6 +40,7 @@ const ANNOUNCEMENT_CHANNEL_ID = '1453854451961041164';
 const LOG_CHANNEL_ID = '1457442534396530809'; 
 const LOSOWANIE_CHANNEL_ID = '1457760176244265125'; // Kanał dla komendy /los
 const WEBSITE_CHANNEL_NAME = 'strona';
+const INFO_CHANNEL_ID = '1457748383337939075';
 
 const APP_URL = process.env.APP_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` || `https://discord-api-jqj5.onrender.com`;
 
@@ -153,7 +154,7 @@ app.post('/github-webhook', async (req, res) => {
         for (const commit of data.commits) {
             const embed = new EmbedBuilder()
                 .setColor(0x0099ff)
-                .setAuthor({ name: commit.author.name || 'GitHub', iconURL: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png' })
+                .setAuthor({ name: 'ResdexToEs' || 'GitHub', iconURL: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png' })
                 .setTitle(`🛠️ Nowy commit: ${data.repository.name}`)
                 .setURL(commit.url)
                 .setDescription(`**Wiadomość:**\n${commit.message}`)
@@ -216,13 +217,13 @@ client.on('interactionCreate', async interaction => {
             const embed = new EmbedBuilder()
                 .setColor(0x2ecc71)
                 .setTitle('🎲 Wygenerowano nowe dane')
-                .setDescription('Dane zostały pomyślnie zapisane w bazie Supabase.')
+                .setDescription('Dane zostały pomyślnie wygenerowane.')
                 .addFields(
                     { name: '👤 Login', value: `\`${randomLogin}\``, inline: true },
                     { name: '🔑 Hasło', value: `\`${randomPassword}\``, inline: true }
                 )
                 .setTimestamp()
-                .setFooter({ text: 'Generator FC Drewno' });
+                .setFooter({ text: 'Generator logowań' });
 
             await interaction.editReply({ embeds: [embed] });
 
@@ -234,8 +235,15 @@ client.on('interactionCreate', async interaction => {
                 await interaction.reply({ content: "Wystąpił błąd serwera.", ephemeral: true });
             }
         }
+
+        if (!error) {
+    await interaction.editReply({ embeds: [embed] });
+    await updateInfoList();
+        }
     }
 });
+
+
 
 // --- POBIERANIE ADMINÓW ---
 app.get('/admins', async (req, res) => {
@@ -305,7 +313,46 @@ app.post('/website-update', async (req, res) => {
     res.status(200).json({ message: "OK" });
 });
 
-app.get('/', (req, res) => res.status(200).send('Żyje! chyba XDDDd'));
+app.get('/', (req, res) => res.status(200).send('Chyba działa?'));
+
+async function updateInfoList() {
+    try {
+        const channel = await client.channels.fetch(INFO_CHANNEL_ID).catch(() => null);
+        if (!channel) return console.error("Nie znaleziono kanału info!");
+
+        // Pobieramy wszystkich użytkowników z bazy
+        const { data: users, error } = await supabase
+            .from('users')
+            .select('login, name') // Pobierz tylko login i imię
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Budujemy treść listy
+        const userList = users.map(u => `👤 **${u.name || 'Brak imienia'}** - \`${u.login}\``).join('\n') || 'Brak zarejestrowanych osób.';
+
+        const embed = new EmbedBuilder()
+            .setColor(0x3498db)
+            .setTitle('📑 Lista zarejestrowanych użytkowników')
+            .setDescription(userList)
+            .setTimestamp()
+            .setFooter({ text: 'Ostatnia aktualizacja' });
+
+        // Szukamy ostatniej wiadomości bota, żeby ją edytować zamiast spamować nowymi
+        const messages = await channel.messages.fetch({ limit: 10 });
+        const lastBotMessage = messages.find(m => m.author.id === client.user.id);
+
+        if (lastBotMessage) {
+            await lastBotMessage.edit({ embeds: [embed] });
+        } else {
+            await channel.send({ embeds: [embed] });
+        }
+        
+        console.log("Lista info zaktualizowana.");
+    } catch (err) {
+        console.error('Błąd aktualizacji listy info:', err.message);
+    }
+}
 
 // --- INICJALIZACJA ---
 client.once('ready', async () => {
@@ -317,6 +364,7 @@ client.once('ready', async () => {
     } catch (error) {
         console.error('Rejestracja komend error:', error);
     }
+    updateInfoList();
 });
 
 const PORT = process.env.PORT || 10000;
@@ -329,6 +377,12 @@ client.login(process.env.DISCORD_TOKEN).then(() => {
 
 // NOWY ENDPOINT: OBSŁUGA LOGOWANIA ZE STRONY WWW
 app.post('/api/login', async (req, res) => {
+
+    if (data) {
+    res.status(200).json({ success: true, userData: data });
+    updateInfoList();
+    }
+
     try {
         const { login, password } = req.body;
 
