@@ -377,7 +377,7 @@ app.post('/api/login', async (req, res) => {
         const { data, error } = await supabase
             .from('users')
             .select('*')
-            .eq('login', login)
+            .ilike('login', login)
             .eq('password', password)
             .single();
 
