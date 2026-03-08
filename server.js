@@ -199,7 +199,7 @@ client.on('interactionCreate', async interaction => {
         try {
             await interaction.deferReply(); 
 
-            const randomLogin = generateRandomString(4);
+            const randomLogin = generateRandomString(4).toLowerCase();
             const randomPassword = generateRandomString(6);
 
             // Zapis do Supabase - tutaj tworzymy zmienną { error }
