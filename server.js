@@ -73,24 +73,6 @@ function generateRandomString(length) {
     return result;
 }
 
-// --- FUNKCJA SELF-PING ---
-function startSelfPing() {
-    if (!APP_URL || APP_URL.includes('undefined')) return;
-    
-    // Zmieniamy na 13 minut (780 000 ms)
-    setInterval(() => {
-        https.get(APP_URL, (res) => {
-            if (res.statusCode === 429) {
-                console.warn('Self-ping: Otrzymano błąd 429 (Zwolnij!).');
-            } else {
-                console.log(`Self-ping (chyba okej): Status ${res.statusCode}`);
-            }
-        }).on('error', (err) => {
-            console.error('Ping error:', err.message);
-        });
-    }, 780000); // 13 minut
-}
-
 // --- ENDPOINT: LOGOWANIE WEJŚĆ (Z IP) ---
 app.post('/log-access', async (req, res) => {
     try {
@@ -355,7 +337,6 @@ client.once('clientReady', async () => {
     try {
         await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
         console.log(`Bot online: ${client.user.tag}`);
-        startSelfPing();
         updateInfoList(); // Twoja funkcja aktualizująca listę na starcie
     } catch (error) {
         console.error('Rejestracja komend error:', error);
