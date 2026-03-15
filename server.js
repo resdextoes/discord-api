@@ -73,22 +73,22 @@ function generateRandomString(length) {
     return result;
 }
 
-// --- FUNKCJA SELF-PING ---
+// Zmieniona funkcja self-ping na lżejszą metodę HEAD
 function startSelfPing() {
     if (!APP_URL || APP_URL.includes('undefined')) return;
     
-    // Zmieniamy na 13 minut (780 000 ms)
     setInterval(() => {
-        https.get(APP_URL, (res) => {
-            if (res.statusCode === 429) {
-                console.warn('Self-ping: Otrzymano błąd 429 (Zwolnij!).');
-            } else {
-                console.log(`Self-ping (chyba okej): Status ${res.statusCode}`);
-            }
+        const options = {
+            method: 'HEAD', // Pobiera tylko nagłówki, nie całą treść strony
+            timeout: 5000
+        };
+
+        https.request(APP_URL, options, (res) => {
+            console.log(`Self-keep-alive (HEAD): Status ${res.statusCode}`);
         }).on('error', (err) => {
-            console.error('Ping error:', err.message);
-        });
-    }, 780000); // 13 minut
+            console.error('Keep-alive error:', err.message);
+        }).end();
+    }, 840000); // 14 minut (bezpieczny zapas przed 15-minutowym limitem)
 }
 
 // --- ENDPOINT: LOGOWANIE WEJŚĆ (Z IP) ---
